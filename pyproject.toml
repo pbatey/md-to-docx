@@ -1,0 +1,51 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "md-to-docx"
+version = "0.1.0"
+description = "Convert Markdown to DOCX with template-based styling, preserving line breaks, tables, lists, and internal links."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Phil Batey" }]
+keywords = ["markdown", "docx", "word", "converter", "python-docx"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: Markup :: Markdown",
+    "Topic :: Office/Business",
+]
+dependencies = ["python-docx"]
+
+[project.scripts]
+md-to-docx = "md_to_docx:main"
+
+[project.urls]
+Homepage = "https://github.com/pbatey/md-to-docx"
+Source = "https://github.com/pbatey/md-to-docx"
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/md_to_docx"]
+
+# Ship the DOCX template as package data so the installed `md-to-docx`
+# command can style output without the source tree present.
+[tool.hatch.build.targets.wheel.force-include]
+"src/md_to_docx/templates/md-template.docx" = "md_to_docx/templates/md-template.docx"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/md_to_docx",
+    "tests",
+    "README.md",
+    "pyproject.toml",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
