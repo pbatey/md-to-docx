@@ -14,5 +14,3 @@ venv/
 
 # Generated output
 *.docx
-!templates/md-template.docx
-!src/md_to_docx/templates/md-template.docx

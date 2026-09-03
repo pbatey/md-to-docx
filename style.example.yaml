@@ -1,0 +1,122 @@
+page:
+  size: letter
+  margins_in:
+    top: 1.0
+    bottom: 1.0
+    left: 1.25
+    right: 1.25
+body:
+  font: Calibri
+  size_pt: 11
+  color: '000000'
+  space_before_pt: 0
+  space_after_pt: 8
+  line_spacing: 1.15
+headings:
+  1:
+    font: Calibri
+    size_pt: 20
+    color: 365F91
+    bold: true
+    italic: false
+    space_before_pt: 18
+    space_after_pt: 4
+  2:
+    font: Calibri
+    size_pt: 16
+    color: 4F81BD
+    bold: true
+    italic: false
+    space_before_pt: 12
+    space_after_pt: 4
+  3:
+    font: Calibri
+    size_pt: 13
+    color: 4F81BD
+    bold: true
+    italic: false
+    space_before_pt: 10
+    space_after_pt: 2
+  4:
+    font: Calibri
+    size_pt: 12
+    color: 4F81BD
+    bold: true
+    italic: false
+    space_before_pt: 10
+    space_after_pt: 2
+  5:
+    font: Calibri
+    size_pt: 11
+    color: 243F60
+    bold: true
+    italic: false
+    space_before_pt: 8
+    space_after_pt: 2
+  6:
+    font: Calibri
+    size_pt: 11
+    color: 243F60
+    bold: false
+    italic: true
+    space_before_pt: 8
+    space_after_pt: 2
+inline_code:
+  font: Consolas
+  size_pt: 10
+  color: null
+  fill: null
+code_block:
+  font: Consolas
+  size_pt: 9
+  fill: F2F2F2
+  padding_pt: 6
+  space_before_pt: 8
+  space_after_pt: 8
+  caption:
+    size_pt: 8
+    color: '808080'
+    italic: true
+blockquote:
+  bar_color: '999999'
+  bar_width_pt: 2.25
+  bar_gap_pt: 12
+  indent_in: 0.25
+  space_after_pt: 4
+lists:
+  bullet:
+    glyphs:
+    - •
+    - ◦
+    indent_in:
+    - 0.25
+    - 0.5
+    space_after_pt: 2
+  ordered:
+    indent_in: 0.5
+    space_after_pt: 2
+    restart_each_block: true
+table:
+  border:
+    style: single
+    width_pt: 0.5
+    color: BFBFBF
+  header:
+    bold: true
+    fill: F2F2F2
+  cell_margins_pt:
+    top: 3.6
+    bottom: 3.6
+    left: 5.4
+    right: 5.4
+  width: full
+note:
+  indent_in: 0.3
+  italic: true
+  size_pt: 10
+hr:
+  space_after_pt: 6
+  rule: false
+links:
+  color: 0563C1
+  underline: true

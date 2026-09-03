@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["python-docx"]
+# dependencies = ["python-docx", "pyyaml"]
 # ///
 """
 Convert onboarding-emails-detail.md to DOCX with proper line break preservation.
@@ -26,6 +26,299 @@ from docx.oxml.ns import qn, nsmap
 from docx.oxml import OxmlElement
 from lxml import etree
 from copy import deepcopy
+import yaml
+
+
+# --------------------------------------------------------------------------- #
+# Styling configuration
+#
+# All styling is applied as *direct formatting* (fonts, sizes, colors, indents,
+# spacing, borders, shading) rather than via named Word styles or a template.
+# The defaults below reproduce the look the project shipped with its old .docx
+# template. A YAML file may override any subset of these keys (see load_style).
+#
+# Units are explicit in key names: ``*_pt`` = points, ``*_in`` = inches. Colors
+# are 6-digit hex strings without a leading ``#``.
+# --------------------------------------------------------------------------- #
+DEFAULT_STYLE = {
+    "page": {
+        # Letter by default. Either a named size or explicit width/height inches.
+        "size": "letter",              # "letter" | "a4"
+        "margins_in": {"top": 1.0, "bottom": 1.0, "left": 1.25, "right": 1.25},
+    },
+    "body": {
+        "font": "Aptos",
+        "size_pt": 11,
+        "color": "000000",
+        "space_before_pt": 0,
+        "space_after_pt": 8,
+        "line_spacing": 1.15,
+    },
+    # Per-level heading formatting (levels 1-6). Colors mirror the old template.
+    "headings": {
+        1: {"font": "Aptos Display", "size_pt": 20, "color": "365F91", "bold": True,
+            "italic": False, "space_before_pt": 18, "space_after_pt": 4},
+        2: {"font": "Aptos Display", "size_pt": 16, "color": "4F81BD", "bold": True,
+            "italic": False, "space_before_pt": 12, "space_after_pt": 4},
+        3: {"font": "Aptos Display", "size_pt": 13, "color": "4F81BD", "bold": True,
+            "italic": False, "space_before_pt": 10, "space_after_pt": 2},
+        4: {"font": "Aptos Display", "size_pt": 12, "color": "4F81BD", "bold": True,
+            "italic": False, "space_before_pt": 10, "space_after_pt": 2},
+        5: {"font": "Aptos Display", "size_pt": 11, "color": "243F60", "bold": True,
+            "italic": False, "space_before_pt": 8, "space_after_pt": 2},
+        6: {"font": "Aptos Display", "size_pt": 11, "color": "243F60", "bold": False,
+            "italic": True, "space_before_pt": 8, "space_after_pt": 2},
+    },
+    "inline_code": {
+        "font": "Consolas",
+        "size_pt": 10,
+        "color": None,                 # optional run color
+        "fill": None,                  # optional run shading (hex) or None
+    },
+    "code_block": {
+        "font": "Consolas",
+        "size_pt": 9,
+        "fill": "F2F2F2",
+        "padding_pt": 6,
+        "space_before_pt": 8,
+        "space_after_pt": 8,
+        "caption": {"size_pt": 8, "color": "808080", "italic": True},
+    },
+    "blockquote": {
+        "bar_color": "365F91",         # same blue as Heading 1
+        "bar_width_pt": 2.25,
+        "bar_gap_pt": 12,
+        "indent_in": 0.25,
+        "space_after_pt": 4,
+    },
+    "lists": {
+        "bullet": {
+            # Per-level bullet glyph + the font that renders it. These mirror
+            # Word's own defaults: level 0 is Symbol's filled bullet (U+F0B7),
+            # level 1 is a lowercase "o" in Courier New (a hollow bullet). Each
+            # glyph must be paired with a font that actually contains it — the
+            # Unicode bullet U+2022 is NOT present in the Symbol font.
+            # Both levels use the Symbol font's filled bullet (U+F0B7). The
+            # Symbol font has no open/hollow bullet glyph, so the sub-bullet
+            # reuses the same mark rather than a broken glyph.
+            "glyphs": ["\uF0B7", "\uF0B7"],     # level 0, level 1
+            "glyph_fonts": ["Symbol", "Symbol"],
+            # Level-0 indent matches the ordered list (0.5") so bullet and
+            # numbered lists align; level 1 nests one step deeper.
+            "indent_in": [0.5, 0.75],
+            "space_after_pt": 2,
+        },
+        "ordered": {
+            "indent_in": 0.5,
+            "space_after_pt": 2,
+            "restart_each_block": True,
+        },
+    },
+    "table": {
+        # Horizontal-rules-only look: a line above and below the header and
+        # under each body row, no vertical lines or side borders.
+        # "edges" lists which borders to draw; omit an edge to leave it off.
+        # Valid edges: top, bottom, left, right, insideH, insideV.
+        "border": {
+            "style": "single",
+            "width_pt": 0.75,
+            "color": "808080",
+            "edges": ["top", "bottom", "insideH"],
+        },
+        # A heavier rule directly under the header row.
+        "header": {
+            "bold": True,
+            "fill": None,                       # no shading behind the header
+            "underline_width_pt": 1.0,
+            "underline_color": "404040",
+        },
+        # Balanced vertical padding with a little left inset.
+        "cell_margins_pt": {"top": 4, "bottom": 4, "left": 5, "right": 10},
+        "width": "full",               # "full" | "auto"
+    },
+    "note": {
+        "indent_in": 0.3,
+        "italic": True,
+        "size_pt": 10,
+    },
+    "hr": {
+        "space_after_pt": 6,
+        "rule": False,                 # True -> draw a bottom border line
+    },
+    "links": {
+        "color": "0563C1",
+        "underline": True,
+    },
+}
+
+
+# Named page sizes in (width_in, height_in).
+_PAGE_SIZES = {
+    "letter": (8.5, 11.0),
+    "a4": (8.27, 11.69),
+}
+
+
+class StyleError(Exception):
+    """Raised when a style config cannot be parsed."""
+
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    """Recursively merge ``override`` into a copy of ``base``.
+
+    Nested dicts merge key-by-key; scalars and lists replace. Keys present only
+    in ``base`` are kept (so a partial YAML overrides just what it names).
+    """
+    result = deepcopy(base)
+    for key, value in override.items():
+        if (key in result and isinstance(result[key], dict)
+                and isinstance(value, dict)):
+            result[key] = _deep_merge(result[key], value)
+        else:
+            result[key] = deepcopy(value)
+    return result
+
+
+def _normalize_heading_keys(cfg: dict) -> dict:
+    """Coerce YAML heading keys (which arrive as strings) to ints 1-6."""
+    headings = cfg.get("headings")
+    if isinstance(headings, dict):
+        normalized = {}
+        for k, v in headings.items():
+            try:
+                normalized[int(k)] = v
+            except (ValueError, TypeError):
+                normalized[k] = v
+        cfg["headings"] = normalized
+    return cfg
+
+
+def load_style(path=None) -> dict:
+    """Return the effective style config: defaults, optionally overridden by YAML.
+
+    ``path`` points at a YAML file whose keys override the corresponding
+    defaults (deep merge). Unknown keys are ignored. Invalid YAML raises
+    :class:`StyleError`.
+    """
+    if path is None:
+        return deepcopy(DEFAULT_STYLE)
+
+    p = Path(path)
+    if not p.is_file():
+        raise StyleError(f"style config not found: {path}")
+    try:
+        loaded = yaml.safe_load(p.read_text(encoding="utf-8"))
+    except yaml.YAMLError as exc:
+        raise StyleError(f"invalid YAML in {path}: {exc}") from exc
+
+    if loaded is None:
+        return deepcopy(DEFAULT_STYLE)
+    if not isinstance(loaded, dict):
+        raise StyleError(f"style config must be a mapping, got {type(loaded).__name__}")
+
+    loaded = _normalize_heading_keys(loaded)
+    return _deep_merge(DEFAULT_STYLE, loaded)
+
+
+def dump_default_style() -> str:
+    """Return the default style config serialized as YAML (for --dump-config)."""
+    return yaml.safe_dump(DEFAULT_STYLE, sort_keys=False, allow_unicode=True)
+
+
+_HEX_COLOR_RE = re.compile(r"^[0-9A-Fa-f]{6}$")
+
+
+def _as_hex(value):
+    """Normalize a color value to a 6-digit hex string, or None.
+
+    YAML parses an all-digit color like ``123456`` as an int, so we stringify
+    and zero-pad to 6 digits before validating.
+    """
+    if value is None:
+        return None
+    if isinstance(value, int):
+        value = f"{value:06d}"
+    value = str(value).strip()
+    return value.upper() if _HEX_COLOR_RE.match(value) else None
+
+
+def _coerce_color(value, default, where):
+    """Return an ``RGBColor`` from a hex string, or ``None`` when unset.
+
+    Malformed values warn to stderr and fall back to ``default`` (which may be
+    ``None``), so one bad color doesn't abort a conversion.
+    """
+    if value is None:
+        value = default
+    if value is None:
+        return None
+    hex_value = _as_hex(value)
+    if hex_value:
+        return RGBColor.from_string(hex_value)
+    print(f"WARNING: invalid color {value!r} for {where}; using default",
+          file=sys.stderr)
+    default_hex = _as_hex(default)
+    return RGBColor.from_string(default_hex) if default_hex else None
+
+
+def _coerce_number(value, default, where):
+    """Return a float from a numeric value, warning + falling back on error."""
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except (ValueError, TypeError):
+        print(f"WARNING: invalid number {value!r} for {where}; using default",
+              file=sys.stderr)
+        return default
+
+
+class StyleConfig:
+    """Typed, validated accessor over the merged style dict.
+
+    Wraps the plain config dict (defaults deep-merged with any YAML) and exposes
+    coercion helpers so render code can pull points/inches/colors without
+    repeating validation. Malformed individual fields fall back to the default
+    for that field (with a warning) rather than raising.
+    """
+
+    def __init__(self, cfg: dict = None):
+        self._cfg = cfg if cfg is not None else deepcopy(DEFAULT_STYLE)
+
+    @property
+    def raw(self) -> dict:
+        return self._cfg
+
+    def section(self, name: str) -> dict:
+        return self._cfg.get(name, {}) or {}
+
+    # -- typed getters ------------------------------------------------------- #
+    def num(self, section: str, key: str, default=0):
+        return _coerce_number(self.section(section).get(key), default,
+                              f"{section}.{key}")
+
+    def color(self, section: str, key: str, default=None):
+        return _coerce_color(self.section(section).get(key), default,
+                             f"{section}.{key}")
+
+    def flag(self, section: str, key: str, default=False):
+        val = self.section(section).get(key, default)
+        return bool(val)
+
+    def text(self, section: str, key: str, default=None):
+        val = self.section(section).get(key, default)
+        return val if val is not None else default
+
+    def heading(self, level: int) -> dict:
+        headings = self._cfg.get("headings", {})
+        return headings.get(level) or DEFAULT_STYLE["headings"].get(level, {})
+
+
+# The style in effect for the current build_docx call. Inline helpers
+# (_style_run/_emit_run) read this so they can apply body and inline-code
+# formatting without threading a config argument through every call site. It is
+# set at the start of build_docx and reset when done.
+_ACTIVE_STYLE = StyleConfig(DEFAULT_STYLE)
 
 
 def slugify_heading(text: str) -> str:
@@ -284,21 +577,37 @@ def _resolve_internal_anchor(target: str, anchors: dict):
     return None
 
 
-def _add_internal_hyperlink(paragraph, text: str, bookmark: str):
-    """Add a run that hyperlinks to an internal bookmark (w:anchor)."""
-    hyperlink = OxmlElement('w:hyperlink')
-    hyperlink.set(qn('w:anchor'), bookmark)
+def _build_hyperlink_run(text: str):
+    """Build a ``w:r`` for a hyperlink, styled with direct color + underline.
+
+    Reads link color/underline from the active style so links render as links
+    without depending on a named "Hyperlink" character style.
+    """
+    sc = _ACTIVE_STYLE
     run = OxmlElement('w:r')
     rPr = OxmlElement('w:rPr')
-    rStyle = OxmlElement('w:rStyle')
-    rStyle.set(qn('w:val'), 'Hyperlink')
-    rPr.append(rStyle)
+    color_hex = _as_hex(sc.text("links", "color", "0563C1"))
+    if color_hex:
+        color = OxmlElement('w:color')
+        color.set(qn('w:val'), color_hex)
+        rPr.append(color)
+    if sc.flag("links", "underline", True):
+        u = OxmlElement('w:u')
+        u.set(qn('w:val'), 'single')
+        rPr.append(u)
     run.append(rPr)
     t = OxmlElement('w:t')
     t.set(qn('xml:space'), 'preserve')
     t.text = text
     run.append(t)
-    hyperlink.append(run)
+    return run
+
+
+def _add_internal_hyperlink(paragraph, text: str, bookmark: str):
+    """Add a run that hyperlinks to an internal bookmark (w:anchor)."""
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('w:anchor'), bookmark)
+    hyperlink.append(_build_hyperlink_run(text))
     paragraph._p.append(hyperlink)
 
 
@@ -312,18 +621,75 @@ def _add_external_hyperlink(paragraph, text: str, url: str):
     )
     hyperlink = OxmlElement('w:hyperlink')
     hyperlink.set(qn('r:id'), r_id)
-    run = OxmlElement('w:r')
-    rPr = OxmlElement('w:rPr')
-    rStyle = OxmlElement('w:rStyle')
-    rStyle.set(qn('w:val'), 'Hyperlink')
-    rPr.append(rStyle)
-    run.append(rPr)
-    t = OxmlElement('w:t')
-    t.set(qn('xml:space'), 'preserve')
-    t.text = text
-    run.append(t)
-    hyperlink.append(run)
+    hyperlink.append(_build_hyperlink_run(text))
     paragraph._p.append(hyperlink)
+
+
+def _apply_page_setup(doc, sc: "StyleConfig"):
+    """Set page size and margins on the document's first section from config."""
+    section = doc.sections[0]
+    page = sc.section("page")
+    size = str(page.get("size", "letter")).lower()
+    if isinstance(page.get("size"), dict):
+        w = _coerce_number(page["size"].get("width_in"), 8.5, "page.size.width_in")
+        h = _coerce_number(page["size"].get("height_in"), 11.0, "page.size.height_in")
+    else:
+        w, h = _PAGE_SIZES.get(size, _PAGE_SIZES["letter"])
+    section.page_width = Inches(w)
+    section.page_height = Inches(h)
+
+    margins = page.get("margins_in", {}) or {}
+    section.top_margin = Inches(_coerce_number(margins.get("top"), 1.0, "page.margins_in.top"))
+    section.bottom_margin = Inches(_coerce_number(margins.get("bottom"), 1.0, "page.margins_in.bottom"))
+    section.left_margin = Inches(_coerce_number(margins.get("left"), 1.25, "page.margins_in.left"))
+    section.right_margin = Inches(_coerce_number(margins.get("right"), 1.25, "page.margins_in.right"))
+
+
+def _apply_paragraph_format(paragraph, *, space_before_pt=None, space_after_pt=None,
+                            line_spacing=None, left_indent_in=None):
+    """Apply direct paragraph-format properties, skipping any left as ``None``."""
+    pf = paragraph.paragraph_format
+    if space_before_pt is not None:
+        pf.space_before = Pt(space_before_pt)
+    if space_after_pt is not None:
+        pf.space_after = Pt(space_after_pt)
+    if line_spacing is not None:
+        pf.line_spacing = line_spacing
+    if left_indent_in is not None:
+        pf.left_indent = Inches(left_indent_in)
+
+
+def _apply_run_format(run, *, font=None, size_pt=None, color=None, bold=None,
+                      italic=None, strike=None, fill=None):
+    """Apply direct run/character formatting, skipping any left as ``None``.
+
+    ``color`` and ``fill`` accept an ``RGBColor`` (or hex string); ``fill`` adds
+    run-level shading via ``w:shd`` on the run properties.
+    """
+    if font is not None:
+        run.font.name = font
+    if size_pt is not None:
+        run.font.size = Pt(size_pt)
+    if bold is not None:
+        run.bold = bold
+    if italic is not None:
+        run.italic = italic
+    if strike is not None:
+        run.font.strike = strike
+    if color is not None:
+        run.font.color.rgb = color if isinstance(color, RGBColor) else RGBColor.from_string(str(color).upper())
+    if fill is not None:
+        hexfill = _as_hex(fill)
+        if hexfill:
+            rPr = run._r.get_or_add_rPr()
+            existing = rPr.find(qn('w:shd'))
+            if existing is not None:
+                rPr.remove(existing)
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), hexfill)
+            rPr.append(shd)
 
 
 def _content_width_emu(paragraph):
@@ -556,7 +922,17 @@ _URL_TRAILING_PUNCT = ".,;:!?)]}'\""
 
 
 def _style_run(run, flags):
-    """Apply the accumulated formatting flags to an existing run."""
+    """Apply the accumulated formatting flags to a run, using the active style.
+
+    Body font/size/color come from ``body.*``; inline ``code`` spans use
+    ``inline_code.*``. Bold/italic/strike are markdown-driven flags.
+    """
+    sc = _ACTIVE_STYLE
+    # Base body formatting for every inline run.
+    _apply_run_format(run,
+                      font=sc.text("body", "font"),
+                      size_pt=sc.num("body", "size_pt", 11),
+                      color=sc.color("body", "color", default="000000"))
     if "bold" in flags:
         run.bold = True
     if "italic" in flags:
@@ -564,8 +940,11 @@ def _style_run(run, flags):
     if "strike" in flags:
         run.font.strike = True
     if "code" in flags:
-        run.font.name = "Consolas"
-        run.font.size = Pt(10)
+        _apply_run_format(run,
+                          font=sc.text("inline_code", "font", "Consolas"),
+                          size_pt=sc.num("inline_code", "size_pt", 10),
+                          color=sc.color("inline_code", "color"),
+                          fill=sc.text("inline_code", "fill"))
 
 
 def _emit_run(paragraph, text, flags):
@@ -655,12 +1034,13 @@ BLOCKQUOTE_BAR_SIZE = '18'        # border thickness in eighths of a point (~2.2
 BLOCKQUOTE_BAR_SPACE = '12'       # space between bar and text, in points
 
 
-def _apply_blockquote_bar(paragraph):
+def _apply_blockquote_bar(paragraph, color=BLOCKQUOTE_BAR_COLOR,
+                          width_pt=2.25, gap_pt=12):
     """Add a left vertical bar (paragraph border) to a blockquote paragraph.
 
-    This renders the blockquote as a paragraph with a vertical bar on the left
-    hand side rather than a plain indented paragraph. The border is applied
-    directly so it works whether or not the template's Quote style is present.
+    ``width_pt`` is the bar thickness in points (converted to the eighths-of-a-
+    point ``sz`` unit); ``gap_pt`` is the space between bar and text in points.
+    Applied as a direct border so it needs no named style.
     """
     pPr = paragraph._p.get_or_add_pPr()
     # Remove any existing borders so repeated calls stay idempotent.
@@ -668,8 +1048,10 @@ def _apply_blockquote_bar(paragraph):
     if existing is not None:
         pPr.remove(existing)
     pBdr = OxmlElement('w:pBdr')
-    left = _make_element('w:left', val='single', sz=BLOCKQUOTE_BAR_SIZE,
-                         space=BLOCKQUOTE_BAR_SPACE, color=BLOCKQUOTE_BAR_COLOR)
+    sz = str(max(1, int(round(width_pt * 8))))   # points -> eighths of a point
+    left = _make_element('w:left', val='single', sz=sz,
+                         space=str(int(round(gap_pt))),
+                         color=_as_hex(color) or "999999")
     pBdr.append(left)
     pPr.append(pBdr)
 
@@ -691,6 +1073,7 @@ def _apply_code_block_box(paragraph, fill=CODE_BLOCK_FILL,
     Vertical breathing room comes from the paragraph's space before/after.
     """
     pPr = paragraph._p.get_or_add_pPr()
+    fill = _as_hex(fill) or "F2F2F2"
 
     # Shading (the gray fill).
     existing_shd = pPr.find(qn('w:shd'))
@@ -713,140 +1096,119 @@ def _apply_code_block_box(paragraph, fill=CODE_BLOCK_FILL,
     pPr.append(pBdr)
 
 
-# The table style provided by templates/md-template.docx. The template ships a
-# sample table that uses Word's "Plain Table 2" style (styleId "PlainTable2"),
-# which is already defined in the template's styles.xml. We reference that style
-# directly instead of synthesizing our own, so table styling stays in sync with
-# whatever the template author configures.
-TEMPLATE_TABLE_STYLE_ID = 'PlainTable2'
+def _apply_custom_table_style(doc, table, sc: "StyleConfig"):
+    """Apply direct table formatting (borders, margins, width) from config.
 
-# Cell margins (top/bottom in dxa) matching the template's sample table.
-TEMPLATE_CELL_MARGIN_TOP_BOTTOM = '72'
-
-
-def _table_style_available(doc, style_id):
-    """Return True if the given table styleId exists in the document's styles."""
-    styles_element = doc.styles._element
-    for existing in styles_element.findall(qn('w:style')):
-        if existing.get(qn('w:styleId')) == style_id and existing.get(qn('w:type')) == 'table':
-            return True
-    return False
-
-
-# Standard Word hyperlink color (the same blue Word applies by default).
-HYPERLINK_COLOR = '0563C1'
-
-
-def _ensure_hyperlink_style(doc):
-    """Guarantee a ``Hyperlink`` character style exists so links look clickable.
-
-    Both internal and external links reference the built-in ``Hyperlink``
-    character style (``rStyle val="Hyperlink"``). Many templates — including the
-    bundled one — don't define it, so Word has nothing to resolve the reference
-    to and renders link text as plain black with no underline. When the style is
-    missing we inject a minimal one (blue + single underline) so links render as
-    links regardless of the template.
+    No named table style is referenced; borders are drawn directly via
+    ``w:tblBorders`` so the look is fully controlled by ``table.*``.
     """
-    styles_element = doc.styles._element
-    for existing in styles_element.findall(qn('w:style')):
-        if (existing.get(qn('w:styleId')) == 'Hyperlink'
-                and existing.get(qn('w:type')) == 'character'):
-            return  # already defined by the template
+    border = sc.section("table").get("border", {}) or {}
+    b_style = border.get("style", "single")
+    b_color = _as_hex(border.get("color")) or "808080"
+    b_size = str(max(2, int(round(_coerce_number(border.get("width_pt"), 0.75, "table.border.width_pt") * 8))))
+    # Which edges get a visible line; any others are explicitly turned off.
+    enabled_edges = border.get("edges")
+    if enabled_edges is None:
+        enabled_edges = ["top", "bottom", "insideH"]
+    enabled_edges = set(enabled_edges)
 
-    style = OxmlElement('w:style')
-    style.set(qn('w:type'), 'character')
-    style.set(qn('w:styleId'), 'Hyperlink')
+    margins = sc.section("table").get("cell_margins_pt", {}) or {}
+    def _pt_to_dxa(v, d):
+        return str(int(round(_coerce_number(v, d, "table.cell_margins_pt") * 20)))
 
-    name = OxmlElement('w:name')
-    name.set(qn('w:val'), 'Hyperlink')
-    style.append(name)
-
-    # Character-only style: don't offer it in the quick style gallery.
-    style.append(OxmlElement('w:unhideWhenUsed'))
-    style.append(OxmlElement('w:semiHidden'))
-
-    rPr = OxmlElement('w:rPr')
-    color = OxmlElement('w:color')
-    color.set(qn('w:val'), HYPERLINK_COLOR)
-    rPr.append(color)
-    u = OxmlElement('w:u')
-    u.set(qn('w:val'), 'single')
-    rPr.append(u)
-    style.append(rPr)
-
-    styles_element.append(style)
-
-
-def _apply_custom_table_style(doc, table):
-    """Apply the template's table style (PlainTable2) and match its table-level
-    properties (tblLook, cell margins) to the sample table in md-template.docx.
-
-    Falls back to the built-in 'Table Grid' style if the template style is
-    missing (e.g. when running without the template).
-    """
-    if _table_style_available(doc, TEMPLATE_TABLE_STYLE_ID):
-        style_id = TEMPLATE_TABLE_STYLE_ID
-    elif _table_style_available(doc, 'TableGrid'):
-        style_id = 'TableGrid'
-    else:
-        style_id = TEMPLATE_TABLE_STYLE_ID  # reference by id; Word resolves if present
-
-    # Set the style on the table
     tbl = table._tbl
     tblPr = tbl.find(qn('w:tblPr'))
     if tblPr is None:
         tblPr = OxmlElement('w:tblPr')
         tbl.insert(0, tblPr)
 
-    # Remove existing style ref if any
-    existing_style = tblPr.find(qn('w:tblStyle'))
-    if existing_style is not None:
-        tblPr.remove(existing_style)
+    # Draw only the enabled edges; disabled edges are set to 'nil' so no line
+    # shows (this is how you get a horizontal-rules-only table).
+    existing_bdr = tblPr.find(qn('w:tblBorders'))
+    if existing_bdr is not None:
+        tblPr.remove(existing_bdr)
+    tblBorders = OxmlElement('w:tblBorders')
+    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+        if edge in enabled_edges:
+            tblBorders.append(_make_element(f'w:{edge}', val=b_style, sz=b_size,
+                                            space='0', color=b_color))
+        else:
+            tblBorders.append(_make_element(f'w:{edge}', val='nil'))
+    tblPr.append(tblBorders)
 
-    tblStyle = _make_element('w:tblStyle', val=style_id)
-    tblPr.insert(0, tblStyle)
-
-    # Set tblLook: firstRow=1, lastRow=0, firstColumn=1, lastColumn=0, noHBand=0, noVBand=1
+    # tblLook: emphasize first row/column.
     existing_look = tblPr.find(qn('w:tblLook'))
     if existing_look is not None:
         tblPr.remove(existing_look)
-    tblLook = _make_element('w:tblLook',
-                            val='04A0',
-                            firstRow='1',
-                            lastRow='0',
-                            firstColumn='1',
-                            lastColumn='0',
-                            noHBand='0',
-                            noVBand='1')
-    tblPr.append(tblLook)
+    tblPr.append(_make_element('w:tblLook', val='04A0', firstRow='1', lastRow='0',
+                               firstColumn='1', lastColumn='0', noHBand='0', noVBand='1'))
 
-    # Cell margins matching the template's sample table (72 dxa top/bottom).
+    # Cell margins from config (points -> dxa).
     existing_mar = tblPr.find(qn('w:tblCellMar'))
     if existing_mar is not None:
         tblPr.remove(existing_mar)
     tblCellMar = OxmlElement('w:tblCellMar')
-    tblCellMar.append(_make_element('w:top', w=TEMPLATE_CELL_MARGIN_TOP_BOTTOM, type='dxa'))
-    tblCellMar.append(_make_element('w:left', w='108', type='dxa'))
-    tblCellMar.append(_make_element('w:bottom', w=TEMPLATE_CELL_MARGIN_TOP_BOTTOM, type='dxa'))
-    tblCellMar.append(_make_element('w:right', w='108', type='dxa'))
+    tblCellMar.append(_make_element('w:top', w=_pt_to_dxa(margins.get("top"), 3.6), type='dxa'))
+    tblCellMar.append(_make_element('w:left', w=_pt_to_dxa(margins.get("left"), 5.4), type='dxa'))
+    tblCellMar.append(_make_element('w:bottom', w=_pt_to_dxa(margins.get("bottom"), 3.6), type='dxa'))
+    tblCellMar.append(_make_element('w:right', w=_pt_to_dxa(margins.get("right"), 5.4), type='dxa'))
     tblPr.append(tblCellMar)
 
-    # Auto-fit columns to content
-    # Set table width to 100% (5000 fifths of a percent)
+    # Width: full (100%) or auto.
     existing_w = tblPr.find(qn('w:tblW'))
     if existing_w is not None:
         tblPr.remove(existing_w)
-    tblW = _make_element('w:tblW', w='5000', type='pct')
-    tblPr.append(tblW)
+    if sc.text("table", "width", "full") == "full":
+        tblPr.append(_make_element('w:tblW', w='5000', type='pct'))
+    else:
+        tblPr.append(_make_element('w:tblW', w='0', type='auto'))
 
-    # Set layout to autofit by default (overridden to fixed for tables with narrow columns)
     existing_layout = tblPr.find(qn('w:tblLayout'))
     if existing_layout is not None:
         tblPr.remove(existing_layout)
-    tblLayout = _make_element('w:tblLayout', type='autofit')
-    tblPr.append(tblLayout)
+    tblPr.append(_make_element('w:tblLayout', type='autofit'))
 
-    # Column widths are set by _fix_narrow_column_widths() after cells are populated.
+
+def _apply_table_header(table, sc: "StyleConfig"):
+    """Style the header row: bold text, optional fill, and an underline rule.
+
+    The header underline is drawn as a per-cell bottom border so it can be
+    heavier/darker than the row rules, matching the reference style.
+    """
+    header = sc.section("table").get("header", {}) or {}
+    if not table.rows:
+        return
+    make_bold = bool(header.get("bold", True))
+    fill = _as_hex(header.get("fill"))
+    ul_color = _as_hex(header.get("underline_color")) or "404040"
+    ul_size = header.get("underline_width_pt")
+    ul_size = str(max(2, int(round(_coerce_number(ul_size, 1.0, "table.header.underline_width_pt") * 8)))) \
+        if ul_size is not None else None
+
+    for cell in table.rows[0].cells:
+        tcPr = cell._tc.get_or_add_tcPr()
+        if fill:
+            existing = tcPr.find(qn('w:shd'))
+            if existing is not None:
+                tcPr.remove(existing)
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), fill)
+            tcPr.append(shd)
+        # Per-cell bottom border = the header underline rule.
+        if ul_size is not None:
+            existing_bdr = tcPr.find(qn('w:tcBorders'))
+            if existing_bdr is not None:
+                tcPr.remove(existing_bdr)
+            tcBorders = OxmlElement('w:tcBorders')
+            tcBorders.append(_make_element('w:bottom', val='single', sz=ul_size,
+                                           space='0', color=ul_color))
+            tcPr.append(tcBorders)
+        if make_bold:
+            for para in cell.paragraphs:
+                for run in para.runs:
+                    run.bold = True
 
 
 def _fix_narrow_column_widths(table):
@@ -925,25 +1287,110 @@ def _new_num_id(doc, abstract_num_id):
     return new_num_id
 
 
-def _find_abstract_num(doc, fmt='bullet', left='360'):
-    """Find an abstractNumId in the template matching the given format and left indent."""
-    numbering_elm = doc.part.numbering_part._element
-    for abstract in numbering_elm.findall(qn('w:abstractNum')):
-        lvl = abstract.find(qn('w:lvl'))
-        if lvl is None:
-            continue
-        numFmt_el = lvl.find(qn('w:numFmt'))
-        if numFmt_el is None or numFmt_el.get(qn('w:val')) != fmt:
-            continue
-        pPr = lvl.find(qn('w:pPr'))
-        if pPr is None:
-            continue
-        ind = pPr.find(qn('w:ind'))
-        if ind is None:
-            continue
-        if ind.get(qn('w:left')) == left:
-            return int(abstract.get(qn('w:abstractNumId')))
-    return None
+def _set_list_numbering(paragraph, num_id: int, ilvl: int = 0):
+    """Attach a ``w:numPr`` (numId + level) to a paragraph for list numbering."""
+    pPr = paragraph._p.get_or_add_pPr()
+    numPr = OxmlElement('w:numPr')
+    numPr.append(_make_element('w:ilvl', val=str(ilvl)))
+    numPr.append(_make_element('w:numId', val=str(num_id)))
+    pPr.append(numPr)
+
+
+def _get_numbering_element(doc):
+    """Return the document's numbering part XML element, creating it if absent.
+
+    A blank ``Document()`` may not ship a numbering part until a list is used;
+    ``numbering_part`` on python-docx creates a default one on access.
+    """
+    return doc.part.numbering_part._element
+
+
+def _make_list_level(ilvl: int, num_fmt: str, lvl_text: str, left_twips: int,
+                     hanging_twips: int = 360, font: str = None):
+    """Build a ``w:lvl`` element for an abstractNum (bullet or decimal)."""
+    lvl = OxmlElement('w:lvl')
+    lvl.set(qn('w:ilvl'), str(ilvl))
+    lvl.append(_make_element('w:start', val='1'))
+    lvl.append(_make_element('w:numFmt', val=num_fmt))
+    lvl.append(_make_element('w:lvlText', val=lvl_text))
+    lvl.append(_make_element('w:lvlJc', val='left'))
+    pPr = OxmlElement('w:pPr')
+    ind = OxmlElement('w:ind')
+    ind.set(qn('w:left'), str(left_twips))
+    ind.set(qn('w:hanging'), str(hanging_twips))
+    pPr.append(ind)
+    lvl.append(pPr)
+    if font:
+        rPr = OxmlElement('w:rPr')
+        rFonts = OxmlElement('w:rFonts')
+        rFonts.set(qn('w:ascii'), font)
+        rFonts.set(qn('w:hAnsi'), font)
+        rFonts.set(qn('w:cs'), font)
+        rFonts.set(qn('w:hint'), 'default')
+        rPr.append(rFonts)
+        lvl.append(rPr)
+    return lvl
+
+
+# abstractNumIds we create in code. Large offset to avoid colliding with any
+# default abstracts python-docx may ship.
+_ABSTRACT_BULLET = 9001
+_ABSTRACT_ORDERED = 9002
+
+
+def _ensure_numbering(doc, sc: "StyleConfig"):
+    """Create our own bullet and decimal abstractNum definitions once per doc.
+
+    Returns ``(bullet_abstract_id, ordered_abstract_id)``. Indents and glyphs
+    come from ``lists.*``. Idempotent: only injects if not already present.
+    """
+    numbering_elm = _get_numbering_element(doc)
+    existing_ids = {int(a.get(qn('w:abstractNumId')))
+                    for a in numbering_elm.findall(qn('w:abstractNum'))}
+
+    bullet = sc.section("lists").get("bullet", {}) or {}
+    # Per-level glyphs and their fonts. Each glyph must live in its paired font
+    # (e.g. U+F0B7 exists in Symbol, but U+2022 does not).
+    glyphs = bullet.get("glyphs") or ["\uF0B7", "o"]
+    # Backward compat: an older single "bullet_font" applies to every level.
+    if bullet.get("glyph_fonts"):
+        glyph_fonts = bullet["glyph_fonts"]
+    else:
+        one_font = bullet.get("bullet_font", "Symbol")
+        glyph_fonts = [one_font, one_font]
+    b_indents = bullet.get("indent_in") or [0.25, 0.5]
+    ordered = sc.section("lists").get("ordered", {}) or {}
+    o_indent = _coerce_number(ordered.get("indent_in"), 0.5, "lists.ordered.indent_in")
+
+    def _in_to_twips(v):
+        return int(round(float(v) * 1440))
+
+    def _glyph(i, fallback):
+        return glyphs[i] if i < len(glyphs) else fallback
+
+    def _gfont(i):
+        return glyph_fonts[i] if i < len(glyph_fonts) else (glyph_fonts[-1] if glyph_fonts else "Symbol")
+
+    def _bindent(i, fallback):
+        return b_indents[i] if i < len(b_indents) else fallback
+
+    if _ABSTRACT_BULLET not in existing_ids:
+        abn = OxmlElement('w:abstractNum')
+        abn.set(qn('w:abstractNumId'), str(_ABSTRACT_BULLET))
+        abn.append(_make_list_level(0, 'bullet', _glyph(0, "\uF0B7"),
+                                    _in_to_twips(_bindent(0, 0.25)), font=_gfont(0)))
+        abn.append(_make_list_level(1, 'bullet', _glyph(1, "o"),
+                                    _in_to_twips(_bindent(1, 0.5)), font=_gfont(1)))
+        # abstractNum must precede num elements; insert at the front.
+        numbering_elm.insert(0, abn)
+
+    if _ABSTRACT_ORDERED not in existing_ids:
+        abn = OxmlElement('w:abstractNum')
+        abn.set(qn('w:abstractNumId'), str(_ABSTRACT_ORDERED))
+        abn.append(_make_list_level(0, 'decimal', '%1.', _in_to_twips(o_indent)))
+        numbering_elm.insert(0, abn)
+
+    return _ABSTRACT_BULLET, _ABSTRACT_ORDERED
 
 
 _bookmark_id_counter = [0]
@@ -976,125 +1423,100 @@ def _add_bookmark(paragraph, name: str):
     p.append(end)
 
 
-def find_template() -> "Path | None":
-    """Locate templates/md-template.docx across standalone and installed use.
+def _set_outline_level(paragraph, level: int):
+    """Set the paragraph's Word outline level (0-based) for nav pane / bookmarks.
 
-    Resolution order (first match wins):
-    1. ``MD_TO_DOCX_TEMPLATE`` environment variable (explicit override).
-    2. ``md-template.docx`` directly beside this script — copy the script and the
-       template into one folder and run with uv, no ``templates/`` needed.
-    3. ``templates/md-template.docx`` next to this script (package data, and the
-       "copy the script + templates folder" workflow).
-    4. ``templates/md-template.docx`` one directory above the script.
-    5. ``templates/md-template.docx`` two directories above the script — the
-       in-repo ``src/md_to_docx/`` layout where the template lives at the root.
-    6. ``templates/md-template.docx`` under the current working directory.
-
-    Returns the first existing path, or ``None`` when no template is found (the
-    caller falls back to a blank document).
+    We no longer use named "Heading N" styles, so we mark the outline level
+    directly. This keeps the document navigable and preserves PDF bookmarks.
     """
-    env_override = os.environ.get("MD_TO_DOCX_TEMPLATE")
-    if env_override:
-        p = Path(env_override).expanduser()
-        if p.exists():
-            return p
-
-    script_dir = Path(__file__).resolve().parent
-    candidates = [
-        # Template dropped directly beside the script (copy the two files and go).
-        script_dir / "md-template.docx",
-        # Bundled package data / template in a templates/ folder next to the script.
-        script_dir / "templates" / "md-template.docx",
-        # Repo root when the script lives directly under it.
-        script_dir.parent / "templates" / "md-template.docx",
-        # Repo root for the src/md_to_docx/ layout (root/templates/...).
-        script_dir.parent.parent / "templates" / "md-template.docx",
-        # Wherever the user is running from.
-        Path.cwd() / "templates" / "md-template.docx",
-    ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-    return None
+    pPr = paragraph._p.get_or_add_pPr()
+    existing = pPr.find(qn('w:outlineLvl'))
+    if existing is not None:
+        pPr.remove(existing)
+    pPr.append(_make_element('w:outlineLvl', val=str(level - 1)))
 
 
-def _add_heading_safe(doc, text: str, level: int):
-    """Add a heading, degrading gracefully when the style is missing.
+def _add_heading(doc, text: str, level: int, sc: "StyleConfig"):
+    """Add a heading as a directly-formatted paragraph (no named style).
 
-    Templates commonly define Heading 1-4 but omit Heading 5/6. ``add_heading``
-    raises ``KeyError`` when the "Heading N" style is absent, so we fall back to
-    a bold paragraph (with a size that steps down by level) rather than failing
-    the whole conversion.
+    Applies the per-level font/size/color/bold/italic and spacing from the style
+    config, sets the outline level, and returns the paragraph. Inline markdown in
+    the heading text is not re-parsed (headings are plain text today).
     """
-    try:
-        return doc.add_heading(text, level=level)
-    except KeyError:
-        p = doc.add_paragraph()
-        run = p.add_run(text)
-        run.bold = True
-        # Step the size down slightly for deeper (fallback) levels.
-        run.font.size = Pt(max(11, 16 - level))
-        return p
+    h = sc.heading(level)
+    p = doc.add_paragraph()
+    _apply_paragraph_format(
+        p,
+        space_before_pt=_coerce_number(h.get("space_before_pt"), 0, f"headings.{level}.space_before_pt"),
+        space_after_pt=_coerce_number(h.get("space_after_pt"), 0, f"headings.{level}.space_after_pt"),
+    )
+    run = p.add_run(text)
+    _apply_run_format(
+        run,
+        font=h.get("font"),
+        size_pt=_coerce_number(h.get("size_pt"), 11, f"headings.{level}.size_pt"),
+        color=_coerce_color(h.get("color"), "000000", f"headings.{level}.color"),
+        bold=bool(h.get("bold", False)),
+        italic=bool(h.get("italic", False)),
+    )
+    _set_outline_level(p, level)
+    return p
 
 
 def build_docx(blocks: list, output_path: str, title: str, author: str, date: str,
-               base_dir=None, allow_remote_images=False):
-    """Build the DOCX from parsed blocks using the template for styles.
+               base_dir=None, allow_remote_images=False, style=None):
+    """Build the DOCX from parsed blocks, applying direct formatting from ``style``.
 
     ``base_dir`` resolves relative image paths; it defaults to the current
     working directory when not supplied. ``allow_remote_images`` enables
-    fetching ``http(s)`` image sources (off by default).
+    fetching ``http(s)`` image sources (off by default). ``style`` is a merged
+    style dict (see :func:`load_style`); when ``None`` the built-in defaults are
+    used.
     """
     if base_dir is None:
         base_dir = Path.cwd()
-    template_path = find_template()
-    if template_path is not None and template_path.exists():
-        doc = Document(str(template_path))
-        # Remove all placeholder content paragraphs and tables from template
-        body = doc.element.body
-        for child in list(body):
-            tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
-            if tag in ('p', 'tbl'):
-                body.remove(child)
-    else:
-        doc = Document()
+    if style is None:
+        style = load_style()
+    sc = StyleConfig(style)
 
-    # Guarantee a Hyperlink character style exists so internal/external links
-    # render blue + underlined even when the template omits the style.
-    _ensure_hyperlink_style(doc)
+    # Publish the active style so inline helpers can read body/inline-code config.
+    global _ACTIVE_STYLE
+    _ACTIVE_STYLE = sc
+
+    # Start from a blank document and style everything as direct formatting.
+    doc = Document()
+    _apply_page_setup(doc, sc)
 
     # Build the heading anchor map (also tags each heading block with a
     # "_bookmark" name) so TOC links can resolve to real internal hyperlinks.
     anchors = build_heading_anchors(blocks)
 
-    # Find the abstractNumIds we need from the template's numbering defs
-    bullet_abstract = _find_abstract_num(doc, fmt='bullet', left='360')
-    bullet2_abstract = _find_abstract_num(doc, fmt='bullet', left='720')
-    numbered_abstract = _find_abstract_num(doc, fmt='decimal', left='720')
-
-    # Fallback to template style numIds if abstracts not found
-    if bullet_abstract is None:
-        bullet_abstract = 8  # default template
-    if bullet2_abstract is None:
-        bullet2_abstract = 6
-    if numbered_abstract is None:
-        numbered_abstract = 7
+    # Create our own list numbering definitions (bullet + decimal) so lists work
+    # without a template's numbering part. Both bullet levels share one abstract.
+    bullet_abstract, numbered_abstract = _ensure_numbering(doc, sc)
+    bullet2_abstract = bullet_abstract
 
     for block in blocks:
         if block["type"] in ("h1", "h2", "h3", "h4", "h5", "h6"):
             level = int(block["type"][1])
-            h = _add_heading_safe(doc, block["text"], level)
+            h = _add_heading(doc, block["text"], level, sc)
             if block.get("_bookmark"):
                 _add_bookmark(h, block["_bookmark"])
 
         elif block["type"] == "hr":
-            # Add a thin line as paragraph border
             p = doc.add_paragraph()
-            p.space_after = Pt(6)
+            _apply_paragraph_format(p, space_after_pt=sc.num("hr", "space_after_pt", 6))
+            # Optionally draw an actual horizontal rule as a bottom border.
+            if sc.flag("hr", "rule", False):
+                pPr = p._p.get_or_add_pPr()
+                pBdr = OxmlElement('w:pBdr')
+                pBdr.append(_make_element('w:bottom', val='single', sz='6',
+                                          space='1', color='BFBFBF'))
+                pPr.append(pBdr)
 
         elif block["type"] == "meta":
             p = doc.add_paragraph()
-            p.space_after = Pt(2)
+            _apply_paragraph_format(p, space_after_pt=2)
             first = True
             for meta_line in block["lines"]:
                 if not first:
@@ -1104,19 +1526,20 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                 first = False
 
         elif block["type"] == "blockquote":
-            # Blockquote (e.g. an email body) — render as a paragraph with a
-            # vertical bar on the left. Uses the template's "Quote" style when
-            # available and applies a left border bar directly (see
-            # _apply_blockquote_bar) so the bar shows with or without the template.
-            # Split into paragraphs on empty lines, add each as separate paragraph.
+            # Blockquote — a directly-formatted paragraph with a left bar. Split
+            # into paragraphs on empty lines; one docx paragraph per chunk.
+            bq_indent = sc.num("blockquote", "indent_in", 0.25)
+            bq_after = sc.num("blockquote", "space_after_pt", 4)
+            bq_color = sc.text("blockquote", "bar_color", "999999")
+            bq_width = sc.num("blockquote", "bar_width_pt", 2.25)
+            bq_gap = sc.num("blockquote", "bar_gap_pt", 12)
+
             def _emit_quote(para_lines):
-                try:
-                    p = doc.add_paragraph(style="Quote")
-                except KeyError:
-                    p = doc.add_paragraph()
-                p.paragraph_format.left_indent = Inches(0.25)
-                p.paragraph_format.space_after = Pt(4)
-                _apply_blockquote_bar(p)
+                p = doc.add_paragraph()
+                _apply_paragraph_format(p, space_after_pt=bq_after,
+                                        left_indent_in=bq_indent)
+                _apply_blockquote_bar(p, color=bq_color, width_pt=bq_width,
+                                      gap_pt=bq_gap)
                 first = True
                 for pl in para_lines:
                     if not first:
@@ -1139,31 +1562,40 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                 _emit_quote(current_para_lines)
 
         elif block["type"] == "code_block":
-            # Render as Consolas text in a shaded, padded box.
+            # Render as monospace text in a shaded, padded box (all from config).
+            cb_font = sc.text("code_block", "font", "Consolas")
+            cb_size = sc.num("code_block", "size_pt", 9)
+            cb_fill = sc.text("code_block", "fill", "F2F2F2")
+            cb_pad = sc.num("code_block", "padding_pt", 6)
+            caption_cfg = sc.section("code_block").get("caption", {}) or {}
+
             p = doc.add_paragraph()
-            p.paragraph_format.space_before = Pt(8)
-            p.paragraph_format.space_after = Pt(8)
+            _apply_paragraph_format(
+                p,
+                space_before_pt=sc.num("code_block", "space_before_pt", 8),
+                space_after_pt=sc.num("code_block", "space_after_pt", 8),
+            )
             # Shaded background plus a same-color border that pads the text.
-            _apply_code_block_box(p)
-            # Optional language caption, styled distinctly from the code so the
-            # info string isn't lost. Only rendered when a language was captured,
-            # so no-language blocks match the previous output exactly.
+            _apply_code_block_box(p, fill=cb_fill, space=str(int(round(cb_pad))))
+            # Optional language caption; only when a language was captured.
             language = block.get("language")
             first_line = True
             if language:
                 caption = p.add_run(language)
-                caption.font.name = "Consolas"
-                caption.font.size = Pt(8)
-                caption.italic = True
-                caption.font.color.rgb = RGBColor(0x80, 0x80, 0x80)
+                _apply_run_format(
+                    caption,
+                    font=cb_font,
+                    size_pt=_coerce_number(caption_cfg.get("size_pt"), 8, "code_block.caption.size_pt"),
+                    color=_coerce_color(caption_cfg.get("color"), "808080", "code_block.caption.color"),
+                    italic=bool(caption_cfg.get("italic", True)),
+                )
                 first_line = False
             # Add each line with line breaks between them
             for line_idx, code_line in enumerate(block["lines"]):
                 if line_idx > 0 or not first_line:
                     p.add_run().add_break()
                 run = p.add_run(code_line)
-                run.font.name = "Consolas"
-                run.font.size = Pt(9)
+                _apply_run_format(run, font=cb_font, size_pt=cb_size)
 
         elif block["type"] == "table":
             # Parse table into rows
@@ -1177,16 +1609,22 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
 
             if rows:
                 table = doc.add_table(rows=len(rows), cols=len(rows[0]))
-                _apply_custom_table_style(doc, table)
+                _apply_custom_table_style(doc, table, sc)
                 for r_idx, row in enumerate(rows):
                     for c_idx, cell in enumerate(row):
                         if c_idx < len(table.columns):
                             tc = table.cell(r_idx, c_idx)
                             tc.text = ""
                             para = tc.paragraphs[0]
+                            # Tight paragraph spacing inside cells so the row
+                            # height is controlled by cell margins, not the
+                            # body paragraph's space_before/after.
+                            _apply_paragraph_format(para, space_before_pt=0,
+                                                    space_after_pt=0)
                             add_formatted_text(para, cell, anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
-                # Now that cells have content, fix column widths
+                # Emphasize the header row, then size columns to content.
+                _apply_table_header(table, sc)
                 _fix_narrow_column_widths(table)
                 # Add a small spacer paragraph after the table
                 spacer = doc.add_paragraph()
@@ -1197,62 +1635,70 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
 
         elif block["type"] == "note":
             p = doc.add_paragraph()
-            p.paragraph_format.left_indent = Inches(0.3)
+            _apply_paragraph_format(p, left_indent_in=sc.num("note", "indent_in", 0.3))
             run = p.add_run(block["text"])
-            run.italic = True
-            run.font.size = Pt(10)
+            _apply_run_format(run,
+                              size_pt=sc.num("note", "size_pt", 10),
+                              italic=sc.flag("note", "italic", True))
 
         elif block["type"] == "paragraph":
             p = doc.add_paragraph()
+            _apply_paragraph_format(
+                p,
+                space_before_pt=sc.num("body", "space_before_pt", 0),
+                space_after_pt=sc.num("body", "space_after_pt", 8),
+                line_spacing=sc.num("body", "line_spacing", 1.15),
+            )
             add_formatted_text(p, block["text"], anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
 
         elif block["type"] == "list":
             # Create a new numId for this bullet list block
             list_num_id = _new_num_id(doc, bullet_abstract)
+            bullet_after = _coerce_number(
+                sc.section("lists").get("bullet", {}).get("space_after_pt"),
+                2, "lists.bullet.space_after_pt")
             for item in block["items"]:
                 # Items are dicts: {"text": str, "checked": Optional[bool]}.
                 # checked is None for a normal bullet, True/False for a task item.
                 item_text = item["text"] if isinstance(item, dict) else item
                 checked = item.get("checked") if isinstance(item, dict) else None
-                p = doc.add_paragraph(style="List Bullet")
-                # Direct numPr override to use our specific numbering instance
-                pPr = p._p.get_or_add_pPr()
-                numPr = OxmlElement('w:numPr')
-                numPr.append(_make_element('w:ilvl', val='0'))
-                numPr.append(_make_element('w:numId', val=str(list_num_id)))
-                pPr.append(numPr)
+                p = doc.add_paragraph()
+                _apply_paragraph_format(p, space_after_pt=bullet_after)
+                _set_list_numbering(p, list_num_id, ilvl=0)
                 # Task items get a checkbox glyph prefix (☑ checked / ☐ unchecked).
+                # Give it the body font so Word doesn't substitute another font
+                # (e.g. Cambria) for the Unicode checkbox symbol.
                 if checked is not None:
-                    p.add_run("\u2611 " if checked else "\u2610 ")
+                    cb_run = p.add_run("\u2611 " if checked else "\u2610 ")
+                    _apply_run_format(cb_run, font=sc.text("body", "font"))
                 add_formatted_text(p, item_text, anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
 
         elif block["type"] == "numbered_list":
             # Create a new numId for this numbered list block (ensures restart)
             list_num_id = _new_num_id(doc, numbered_abstract)
+            ordered_after = _coerce_number(
+                sc.section("lists").get("ordered", {}).get("space_after_pt"),
+                2, "lists.ordered.space_after_pt")
+            bullet_after = _coerce_number(
+                sc.section("lists").get("bullet", {}).get("space_after_pt"),
+                2, "lists.bullet.space_after_pt")
             for item in block["items"]:
                 item_text = item["text"] if isinstance(item, dict) else item
                 sub_items = item.get("sub_items", []) if isinstance(item, dict) else []
-                p = doc.add_paragraph(style="List Number")
-                # Direct numPr override
-                pPr = p._p.get_or_add_pPr()
-                numPr = OxmlElement('w:numPr')
-                numPr.append(_make_element('w:ilvl', val='0'))
-                numPr.append(_make_element('w:numId', val=str(list_num_id)))
-                pPr.append(numPr)
+                p = doc.add_paragraph()
+                _apply_paragraph_format(p, space_after_pt=ordered_after)
+                _set_list_numbering(p, list_num_id, ilvl=0)
                 add_formatted_text(p, item_text, anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
-                # Render sub-items as indented bullets
+                # Render sub-items as indented bullets (level 1 of the bullet list).
                 if sub_items:
                     sub_num_id = _new_num_id(doc, bullet2_abstract)
                     for sub in sub_items:
-                        sp = doc.add_paragraph(style="List Bullet 2")
-                        sp_pPr = sp._p.get_or_add_pPr()
-                        sp_numPr = OxmlElement('w:numPr')
-                        sp_numPr.append(_make_element('w:ilvl', val='0'))
-                        sp_numPr.append(_make_element('w:numId', val=str(sub_num_id)))
-                        sp_pPr.append(sp_numPr)
+                        sp = doc.add_paragraph()
+                        _apply_paragraph_format(sp, space_after_pt=bullet_after)
+                        _set_list_numbering(sp, sub_num_id, ilvl=1)
                         add_formatted_text(sp, sub, anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
 
@@ -1296,16 +1742,32 @@ def check_output_writable(output_path: str):
 def main():
     # Separate flags from positional args so ordering is flexible.
     allow_remote_images = False
+    style_path = os.environ.get("MD_TO_DOCX_STYLE")
     positional = []
-    for arg in sys.argv[1:]:
+    args = sys.argv[1:]
+    i = 0
+    while i < len(args):
+        arg = args[i]
         if arg in ("--fetch-remote-images", "--fetch-remote"):
             allow_remote_images = True
+        elif arg == "--dump-config":
+            print(dump_default_style(), end="")
+            sys.exit(0)
+        elif arg == "--style":
+            if i + 1 >= len(args):
+                print("ERROR: --style requires a path argument")
+                sys.exit(1)
+            style_path = args[i + 1]
+            i += 1
+        elif arg.startswith("--style="):
+            style_path = arg.split("=", 1)[1]
         else:
             positional.append(arg)
+        i += 1
 
     if len(positional) < 2:
         print("Usage: uv run md_to_docx.py [--fetch-remote-images] "
-              "<input.md> <output.docx>")
+              "[--style config.yaml] [--dump-config] <input.md> <output.docx>")
         sys.exit(1)
 
     input_path = positional[0]
@@ -1313,6 +1775,12 @@ def main():
 
     if not Path(input_path).exists():
         print(f"ERROR: {input_path} not found")
+        sys.exit(1)
+
+    try:
+        style = load_style(style_path)
+    except StyleError as exc:
+        print(f"ERROR: {exc}")
         sys.exit(1)
 
     # Preflight: bail early with a clear message if the output is locked/open.
@@ -1330,6 +1798,7 @@ def main():
         # Resolve relative image paths against the markdown file's directory.
         base_dir=Path(input_path).resolve().parent,
         allow_remote_images=allow_remote_images,
+        style=style,
     )
 
 

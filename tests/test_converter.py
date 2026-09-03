@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from docx import Document
 
-from md_to_docx import build_docx, find_template, parse_markdown
+from md_to_docx import build_docx, parse_markdown
 from md_to_docx.md_to_docx import build_heading_anchors, slugify_heading
 
 
@@ -106,42 +106,6 @@ def test_build_heading_anchors_unique_slugs():
     assert "details" in anchors
     # Each heading block gets a bookmark tag.
     assert all("_bookmark" in b for b in blocks)
-
-
-# --------------------------------------------------------------------------- #
-# find_template
-# --------------------------------------------------------------------------- #
-def test_find_template_env_override(tmp_path, monkeypatch):
-    fake = tmp_path / "custom.docx"
-    fake.write_bytes(b"not really a docx")
-    monkeypatch.setenv("MD_TO_DOCX_TEMPLATE", str(fake))
-    assert find_template() == fake
-
-
-def test_find_template_default_exists():
-    # The repo/package ships a template; it should resolve without an override.
-    template = find_template()
-    assert template is not None
-    assert template.exists()
-    assert template.name == "md-template.docx"
-
-
-def test_find_template_sibling_file_first(tmp_path, monkeypatch):
-    """A md-template.docx sitting directly beside the script wins over the
-    bundled templates/ copy (candidate 2 in the resolution order)."""
-    import md_to_docx.md_to_docx as mod
-
-    # Point the module's __file__ at a temp dir and drop a template beside it.
-    fake_script = tmp_path / "md_to_docx.py"
-    fake_script.write_text("# fake")
-    sibling = tmp_path / "md-template.docx"
-    sibling.write_bytes(b"stub")
-    monkeypatch.setattr(mod, "__file__", str(fake_script))
-    monkeypatch.delenv("MD_TO_DOCX_TEMPLATE", raising=False)
-    # Run from a CWD with no templates/ so only script-relative lookups apply.
-    monkeypatch.chdir(tmp_path)
-
-    assert find_template() == sibling
 
 
 # --------------------------------------------------------------------------- #
@@ -461,38 +425,310 @@ def test_trailing_punctuation_trimmed_from_url(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
-# Hyperlink character style (links look clickable even without a template style)
+# Hyperlinks are styled with direct color + underline (no named style)
 # --------------------------------------------------------------------------- #
-def _has_hyperlink_style(doc):
-    from docx.oxml.ns import qn
-    for s in doc.styles.element.findall(qn("w:style")):
-        if (s.get(qn("w:styleId")) == "Hyperlink"
-                and s.get(qn("w:type")) == "character"):
-            return s
-    return None
-
-
-def test_hyperlink_style_injected(tmp_path):
+def test_hyperlink_direct_color_and_underline(tmp_path):
     from docx.oxml.ns import qn
     doc = _render_para("see https://example.com now", tmp_path)
-    style = _has_hyperlink_style(doc)
-    assert style is not None
-    # It should carry a color and an underline so links render as links.
-    rpr = style.find(qn("w:rPr"))
-    assert rpr is not None
-    assert rpr.find(qn("w:color")) is not None
-    assert rpr.find(qn("w:u")) is not None
+    found = False
+    for h in doc.element.body.iter(qn("w:hyperlink")):
+        rPr = h.find(qn("w:r") + "/" + qn("w:rPr"))
+        if rPr is None:
+            continue
+        color = rPr.find(qn("w:color"))
+        u = rPr.find(qn("w:u"))
+        if color is not None and color.get(qn("w:val")) == "0563C1" and u is not None:
+            found = True
+    assert found
 
 
-def test_internal_link_references_hyperlink_style(tmp_path):
+def test_internal_link_directly_styled(tmp_path):
     from docx.oxml.ns import qn
     md = "# Overview\n\nJump to [Details](#details).\n\n## Details\n\nHere."
     doc = _render_para(md, tmp_path)
-    # The internal hyperlink run should reference the Hyperlink style.
+    # An internal-anchor hyperlink exists and its run carries a direct color.
     styled = False
     for h in doc.element.body.iter(qn("w:hyperlink")):
-        for rstyle in h.iter(qn("w:rStyle")):
-            if rstyle.get(qn("w:val")) == "Hyperlink":
-                styled = True
+        if h.get(qn("w:anchor")) is None:
+            continue
+        rPr = h.find(qn("w:r") + "/" + qn("w:rPr"))
+        if rPr is not None and rPr.find(qn("w:color")) is not None:
+            styled = True
     assert styled
-    assert _has_hyperlink_style(doc) is not None
+
+
+def test_link_color_override(tmp_path):
+    from docx.oxml.ns import qn
+    from md_to_docx import build_docx as _b, load_style
+    cfg_file = tmp_path / "s.yaml"
+    cfg_file.write_text("links:\n  color: FF0000\n", encoding="utf-8")
+    blocks = parse_markdown("visit https://example.com")
+    out = tmp_path / "o.docx"
+    _b(blocks, str(out), title="T", author="A", date="d",
+       style=load_style(str(cfg_file)))
+    doc = Document(str(out))
+    reds = [c for c in doc.element.body.iter(qn("w:color"))
+            if c.get(qn("w:val")) == "FF0000"]
+    assert reds
+
+
+# --------------------------------------------------------------------------- #
+# Style config: defaults, loading, merging (YAML)
+# --------------------------------------------------------------------------- #
+def test_load_style_defaults_when_no_path():
+    from md_to_docx import DEFAULT_STYLE, load_style
+    cfg = load_style()
+    assert cfg == DEFAULT_STYLE
+    # It's a copy, not the same object (so callers can't mutate defaults).
+    assert cfg is not DEFAULT_STYLE
+
+
+def test_load_style_deep_merge(tmp_path):
+    from md_to_docx import load_style
+    yaml_file = tmp_path / "style.yaml"
+    yaml_file.write_text(
+        "body:\n  size_pt: 13\nheadings:\n  1:\n    color: FF0000\n",
+        encoding="utf-8")
+    cfg = load_style(str(yaml_file))
+    # Overridden values applied.
+    assert cfg["body"]["size_pt"] == 13
+    assert cfg["headings"][1]["color"] == "FF0000"
+    # Sibling defaults preserved (deep merge, not wholesale replace).
+    assert cfg["body"]["font"] == "Aptos"
+    assert cfg["headings"][1]["bold"] is True
+    assert cfg["headings"][2]["color"] == "4F81BD"
+
+
+def test_load_style_invalid_yaml_raises(tmp_path):
+    from md_to_docx import StyleError, load_style
+    bad = tmp_path / "bad.yaml"
+    bad.write_text("body: : : not valid\n", encoding="utf-8")
+    with pytest.raises(StyleError):
+        load_style(str(bad))
+
+
+def test_load_style_missing_file_raises():
+    from md_to_docx import StyleError, load_style
+    with pytest.raises(StyleError):
+        load_style("does-not-exist.yaml")
+
+
+def test_load_style_unknown_keys_ignored(tmp_path):
+    from md_to_docx import load_style
+    yaml_file = tmp_path / "style.yaml"
+    yaml_file.write_text("totally_unknown_key: 42\nbody:\n  size_pt: 12\n",
+                         encoding="utf-8")
+    cfg = load_style(str(yaml_file))
+    # Unknown key is merged in but harmless; known override still works.
+    assert cfg["body"]["size_pt"] == 12
+
+
+def test_dump_config_roundtrips_to_defaults():
+    import yaml as _yaml
+    from md_to_docx import DEFAULT_STYLE, dump_default_style
+    text = dump_default_style()
+    parsed = _yaml.safe_load(text)
+    # Heading keys come back as ints via normalization path; compare loosely.
+    assert parsed["body"] == DEFAULT_STYLE["body"]
+    assert parsed["links"] == DEFAULT_STYLE["links"]
+
+
+def test_styleconfig_coercion(tmp_path):
+    from md_to_docx import StyleConfig, load_style
+    sc = StyleConfig(load_style())
+    # number + color coercion
+    assert sc.num("body", "size_pt") == 11.0
+    assert sc.color("links", "color") is not None
+    # malformed color falls back (warns), does not raise
+    bad = tmp_path / "s.yaml"
+    bad.write_text("links:\n  color: nothex\n", encoding="utf-8")
+    sc2 = StyleConfig(load_style(str(bad)))
+    # falls back to default link color, still a valid RGBColor
+    assert sc2.color("links", "color", default="0563C1") is not None
+
+
+# --------------------------------------------------------------------------- #
+# Direct-formatting: headings, body, page (no template)
+# --------------------------------------------------------------------------- #
+def test_heading_direct_formatting_and_outline(tmp_path):
+    from docx.oxml.ns import qn
+    doc = _render_para("# Big Title", tmp_path)
+    p = next(p for p in doc.paragraphs if "Big Title" in p.text)
+    # Direct run color/size from defaults (H1 = 365F91, 20pt).
+    run = p.runs[0]
+    assert run.font.color.rgb is not None
+    assert run.bold is True
+    # Outline level set to 0 for h1.
+    outline = p._p.find(qn("w:pPr") + "/" + qn("w:outlineLvl"))
+    assert outline is not None and outline.get(qn("w:val")) == "0"
+
+
+def test_heading_color_override(tmp_path):
+    from md_to_docx import build_docx as _b, load_style
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text("headings:\n  1:\n    color: FF0000\n", encoding="utf-8")
+    blocks = parse_markdown("# Title")
+    out = tmp_path / "o.docx"
+    _b(blocks, str(out), title="T", author="A", date="d",
+       style=load_style(str(cfg)))
+    doc = Document(str(out))
+    run = next(p for p in doc.paragraphs if "Title" in p.text).runs[0]
+    assert str(run.font.color.rgb) == "FF0000"
+
+
+def test_body_font_applied(tmp_path):
+    doc = _render_para("plain paragraph text", tmp_path)
+    p = next(p for p in doc.paragraphs if "plain paragraph" in p.text)
+    assert p.runs[0].font.name == "Aptos"
+
+
+def test_page_margins_applied(tmp_path):
+    from docx.shared import Inches
+    from md_to_docx import build_docx as _b, load_style
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text("page:\n  margins_in:\n    left: 2.0\n", encoding="utf-8")
+    blocks = parse_markdown("# t")
+    out = tmp_path / "o.docx"
+    _b(blocks, str(out), title="T", author="A", date="d",
+       style=load_style(str(cfg)))
+    doc = Document(str(out))
+    assert doc.sections[0].left_margin == Inches(2.0)
+
+
+# --------------------------------------------------------------------------- #
+# Config-driven code block, blockquote, inline code
+# --------------------------------------------------------------------------- #
+def _render_with_style(md, tmp_path, yaml_text):
+    from md_to_docx import build_docx as _b, load_style
+    cfg = tmp_path / "s.yaml"
+    cfg.write_text(yaml_text, encoding="utf-8")
+    blocks = parse_markdown(md)
+    out = tmp_path / "o.docx"
+    _b(blocks, str(out), title="T", author="A", date="d",
+       base_dir=tmp_path, style=load_style(str(cfg)))
+    return Document(str(out))
+
+
+def test_code_block_fill_override(tmp_path):
+    from docx.oxml.ns import qn
+    doc = _render_with_style("```\nx=1\n```", tmp_path,
+                             "code_block:\n  fill: ABCDEF\n")
+    code_p = next(p for p in doc.paragraphs if "x=1" in p.text)
+    shd = code_p._p.find(qn("w:pPr") + "/" + qn("w:shd"))
+    assert shd is not None and shd.get(qn("w:fill")) == "ABCDEF"
+
+
+def test_blockquote_bar_color_override(tmp_path):
+    from docx.oxml.ns import qn
+    doc = _render_with_style("> quoted", tmp_path,
+                             "blockquote:\n  bar_color: 112233\n")
+    q = next(p for p in doc.paragraphs if "quoted" in p.text)
+    left = q._p.find(qn("w:pPr") + "/" + qn("w:pBdr") + "/" + qn("w:left"))
+    assert left is not None and left.get(qn("w:color")) == "112233"
+
+
+def test_inline_code_font_override(tmp_path):
+    doc = _render_with_style("use `foo` here", tmp_path,
+                             "inline_code:\n  font: Courier New\n")
+    code_runs = [r for p in doc.paragraphs for r in p.runs if r.text == "foo"]
+    assert code_runs and code_runs[0].font.name == "Courier New"
+
+
+# --------------------------------------------------------------------------- #
+# Lists/numbering without a template
+# --------------------------------------------------------------------------- #
+def test_bullet_list_has_numbering(tmp_path):
+    from docx.oxml.ns import qn
+    doc = _render_para("- one\n- two", tmp_path)
+    numprs = list(doc.element.body.iter(qn("w:numPr")))
+    assert len(numprs) == 2
+
+
+def test_two_ordered_lists_each_restart(tmp_path):
+    from docx.oxml.ns import qn
+    md = "1. a\n2. b\n\ntext\n\n1. c\n2. d"
+    doc = _render_para(md, tmp_path)
+    # Two separate numId values (one per block) so each restarts at 1.
+    num_ids = set()
+    for numPr in doc.element.body.iter(qn("w:numPr")):
+        nid = numPr.find(qn("w:numId"))
+        if nid is not None:
+            num_ids.add(nid.get(qn("w:val")))
+    assert len(num_ids) >= 2
+    # Each created num has a startOverride of 1.
+    numbering = doc.part.numbering_part._element
+    overrides = [o.get(qn("w:val"))
+                 for o in numbering.iter(qn("w:startOverride"))]
+    assert overrides and all(v == "1" for v in overrides)
+
+
+def test_numbered_list_subitems_nest(tmp_path):
+    from docx.oxml.ns import qn
+    md = "1. first\n   - sub a\n   - sub b\n2. second"
+    doc = _render_para(md, tmp_path)
+    # Sub-bullets render at ilvl 1.
+    ilvls = [e.get(qn("w:val")) for e in doc.element.body.iter(qn("w:ilvl"))]
+    assert "1" in ilvls
+
+
+def test_task_glyphs_preserved(tmp_path):
+    doc = _render_para("- [ ] todo\n- [x] done", tmp_path)
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "\u2610" in text and "\u2611" in text
+
+
+# --------------------------------------------------------------------------- #
+# Table direct borders + header
+# --------------------------------------------------------------------------- #
+def test_table_direct_borders_and_header(tmp_path):
+    from docx.oxml.ns import qn
+    md = "| A | B |\n|---|---|\n| 1 | 2 |"
+    doc = _render_with_style(
+        md, tmp_path,
+        "table:\n  border:\n    color: 123456\n  header:\n    bold: true\n    fill: EEEEEE\n")
+    t = doc.tables[0]
+    tblBorders = t._tbl.find(qn("w:tblPr") + "/" + qn("w:tblBorders"))
+    assert tblBorders is not None
+    top = tblBorders.find(qn("w:top"))
+    assert top is not None and top.get(qn("w:color")) == "123456"
+    # Header row bold + shaded.
+    hdr_cell = t.rows[0].cells[0]
+    assert any(r.bold for para in hdr_cell.paragraphs for r in para.runs)
+    shd = hdr_cell._tc.find(qn("w:tcPr") + "/" + qn("w:shd"))
+    assert shd is not None and shd.get(qn("w:fill")) == "EEEEEE"
+
+
+def test_table_horizontal_rules_only_by_default(tmp_path):
+    from docx.oxml.ns import qn
+    md = "| A | B |\n|---|---|\n| 1 | 2 |"
+    doc = _render_para(md, tmp_path)
+    t = doc.tables[0]
+    tblBorders = t._tbl.find(qn("w:tblPr") + "/" + qn("w:tblBorders"))
+    assert tblBorders is not None
+    # Horizontal edges drawn, vertical edges turned off (val="nil").
+    assert tblBorders.find(qn("w:top")).get(qn("w:val")) == "single"
+    assert tblBorders.find(qn("w:bottom")).get(qn("w:val")) == "single"
+    assert tblBorders.find(qn("w:insideH")).get(qn("w:val")) == "single"
+    assert tblBorders.find(qn("w:insideV")).get(qn("w:val")) == "nil"
+    assert tblBorders.find(qn("w:left")).get(qn("w:val")) == "nil"
+    assert tblBorders.find(qn("w:right")).get(qn("w:val")) == "nil"
+    # No header fill by default; a header underline (per-cell bottom border) is set.
+    hdr = t.rows[0].cells[0]._tc
+    assert hdr.find(qn("w:tcPr") + "/" + qn("w:shd")) is None
+    ul = hdr.find(qn("w:tcPr") + "/" + qn("w:tcBorders") + "/" + qn("w:bottom"))
+    assert ul is not None and ul.get(qn("w:val")) == "single"
+
+
+# --------------------------------------------------------------------------- #
+# CLI: --dump-config
+# --------------------------------------------------------------------------- #
+def test_dump_config_cli(tmp_path, monkeypatch, capsys):
+    import yaml as _yaml
+    from md_to_docx import DEFAULT_STYLE, main
+    monkeypatch.setattr("sys.argv", ["md-to-docx", "--dump-config"])
+    with pytest.raises(SystemExit) as exc:
+        main()
+    assert exc.value.code == 0
+    out = capsys.readouterr().out
+    parsed = _yaml.safe_load(out)
+    assert parsed["body"] == DEFAULT_STYLE["body"]
