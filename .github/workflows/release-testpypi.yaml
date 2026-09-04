@@ -1,0 +1,55 @@
+name: Release (TestPyPI dry-run)
+
+# Manual dry-run of the publish pipeline against TestPyPI.
+# Run it from the Actions tab ("Run workflow") to validate the build and
+# Trusted Publishing setup before cutting a real release to PyPI.
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Build sdist and wheel
+        run: uv build --no-sources
+
+      - name: Upload distributions as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-testpypi:
+    needs: build
+    runs-on: ubuntu-latest
+    # The TestPyPI Trusted Publisher must be configured to allow this environment.
+    environment: testpypi
+    permissions:
+      id-token: write   # OIDC token for TestPyPI Trusted Publishing
+    steps:
+      # uv publish --index <name> reads publish-url from pyproject.toml,
+      # so a checkout is required here (unlike the production publish job).
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: false
+
+      - name: Download distributions artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Publish to TestPyPI (Trusted Publishing)
+        run: uv publish --index testpypi
