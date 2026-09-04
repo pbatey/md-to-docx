@@ -67,6 +67,30 @@ def test_parse_numbered_list_with_subitems():
     assert items[1]["text"] == "second"
 
 
+def test_bullet_continuation_joined_with_space():
+    # A soft-wrapped continuation line joins with a space, not a newline, so
+    # emphasis spanning the wrap still pairs up.
+    blocks = parse_markdown("- the **Doc\n  Repo** value")
+    assert blocks[0]["items"][0]["text"] == "the **Doc Repo** value"
+
+
+def test_numbered_continuation_joined_with_space():
+    blocks = parse_markdown("1. the **Doc\n   Repo** value")
+    assert blocks[0]["items"][0]["text"] == "the **Doc Repo** value"
+
+
+def test_bold_spanning_bullet_wrap_renders(tmp_path):
+    doc = _render_para("- stored in the **Doc\n  Repo** now", tmp_path)
+    p = next(p for p in doc.paragraphs if "Doc Repo" in p.text)
+    assert any(r.bold and "Doc Repo" in r.text for r in p.runs)
+
+
+def test_bold_spanning_numbered_wrap_renders(tmp_path):
+    doc = _render_para("1. uploaded to the **Doc\n   Repo**, then done", tmp_path)
+    p = next(p for p in doc.paragraphs if "Doc Repo" in p.text)
+    assert any(r.bold and "Doc Repo" in r.text for r in p.runs)
+
+
 def test_parse_blockquote_preserves_lines():
     md = "> line one\n> line two"
     blocks = parse_markdown(md)

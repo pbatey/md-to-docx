@@ -495,7 +495,13 @@ def parse_markdown(text: str) -> list:
                         next_line = lines[i]
                         # Indented continuation (2+ spaces, not a new bullet)
                         if re.match(r"^\s{2,}\S", next_line) and not next_line.strip().startswith("- "):
-                            item_text += "\n" + next_line.strip()
+                            # A soft-wrapped line joins with a space (so inline
+                            # emphasis spanning the wrap still pairs up); only a
+                            # trailing double-space forces a hard line break.
+                            if item_text.endswith("  "):
+                                item_text = item_text.rstrip() + "\n" + next_line.strip()
+                            else:
+                                item_text = item_text.rstrip("\n") + " " + next_line.strip()
                             i += 1
                         else:
                             break
@@ -523,7 +529,13 @@ def parse_markdown(text: str) -> list:
                             i += 1
                         # Indented continuation text (e.g., "   OR no match found")
                         elif re.match(r"^\s{2,}\S", next_line) and not re.match(r"^\d+\.\s", next_line):
-                            item_text += "\n" + next_line.strip()
+                            # Soft wrap joins with a space so inline emphasis
+                            # spanning the wrap still pairs; a trailing
+                            # double-space forces a hard line break.
+                            if item_text.endswith("  "):
+                                item_text = item_text.rstrip() + "\n" + next_line.strip()
+                            else:
+                                item_text = item_text.rstrip("\n") + " " + next_line.strip()
                             i += 1
                         else:
                             break
