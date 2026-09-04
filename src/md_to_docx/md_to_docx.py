@@ -22,6 +22,7 @@ from pathlib import Path
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor, Emu
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml.ns import qn, nsmap
 from docx.oxml import OxmlElement
 from lxml import etree
@@ -41,13 +42,22 @@ import yaml
 # are 6-digit hex strings without a leading ``#``.
 # --------------------------------------------------------------------------- #
 DEFAULT_STYLE = {
+    # Global document-default font. Written to docDefaults/rPrDefault so every
+    # style and run that does not set its own font inherits it. ``null`` here is
+    # not meaningful (there must be a document default); it falls back to Aptos.
+    "font": "Aptos",
+    # Default heading typeface. Every heading level whose own ``font`` is
+    # null/absent inherits this, so the heading face is set in one place. Set a
+    # per-level ``font`` to override just that level.
+    "heading_font": "Aptos Display",
     "page": {
         # Letter by default. Either a named size or explicit width/height inches.
         "size": "letter",              # "letter" | "a4"
         "margins_in": {"top": 1.0, "bottom": 1.0, "left": 1.25, "right": 1.25},
     },
     "body": {
-        "font": "Aptos",
+        # null => inherit the global default font (see top-level ``font``).
+        "font": None,
         "size_pt": 11,
         "color": "000000",
         "space_before_pt": 0,
@@ -55,19 +65,32 @@ DEFAULT_STYLE = {
         "line_spacing": 1.15,
     },
     # Per-level heading formatting (levels 1-6). Colors mirror the old template.
+    # ``font: null`` (the default) means "inherit the top-level heading_font";
+    # set a level's ``font`` to override just that level.
+    #
+    # ``rule`` draws a horizontal line under the heading. It's a mapping of
+    # ``width_pt`` (line thickness), ``color`` (hex), and ``space_pt`` (gap
+    # between the text and the line). ``rule: null`` (the default for H3-H6)
+    # means no line. H1 and H2 get a rule by default.
     "headings": {
-        1: {"font": "Aptos Display", "size_pt": 20, "color": "365F91", "bold": True,
-            "italic": False, "space_before_pt": 18, "space_after_pt": 4},
-        2: {"font": "Aptos Display", "size_pt": 16, "color": "4F81BD", "bold": True,
-            "italic": False, "space_before_pt": 12, "space_after_pt": 4},
-        3: {"font": "Aptos Display", "size_pt": 13, "color": "4F81BD", "bold": True,
-            "italic": False, "space_before_pt": 10, "space_after_pt": 2},
-        4: {"font": "Aptos Display", "size_pt": 12, "color": "4F81BD", "bold": True,
-            "italic": False, "space_before_pt": 10, "space_after_pt": 2},
-        5: {"font": "Aptos Display", "size_pt": 11, "color": "243F60", "bold": True,
-            "italic": False, "space_before_pt": 8, "space_after_pt": 2},
-        6: {"font": "Aptos Display", "size_pt": 11, "color": "243F60", "bold": False,
-            "italic": True, "space_before_pt": 8, "space_after_pt": 2},
+        1: {"font": None, "size_pt": 20, "color": "365F91", "bold": True,
+            "italic": False, "space_before_pt": 18, "space_after_pt": 4,
+            "rule": {"width_pt": 1.0, "color": "365F91", "space_pt": 2}},
+        2: {"font": None, "size_pt": 16, "color": "4F81BD", "bold": True,
+            "italic": False, "space_before_pt": 12, "space_after_pt": 4,
+            "rule": {"width_pt": 0.75, "color": "4F81BD", "space_pt": 2}},
+        3: {"font": None, "size_pt": 13, "color": "4F81BD", "bold": True,
+            "italic": False, "space_before_pt": 10, "space_after_pt": 2,
+            "rule": None},
+        4: {"font": None, "size_pt": 12, "color": "4F81BD", "bold": True,
+            "italic": False, "space_before_pt": 10, "space_after_pt": 2,
+            "rule": None},
+        5: {"font": None, "size_pt": 11, "color": "243F60", "bold": True,
+            "italic": False, "space_before_pt": 8, "space_after_pt": 2,
+            "rule": None},
+        6: {"font": None, "size_pt": 11, "color": "243F60", "bold": False,
+            "italic": True, "space_before_pt": 8, "space_after_pt": 2,
+            "rule": None},
     },
     "inline_code": {
         "font": "Consolas",
@@ -82,6 +105,7 @@ DEFAULT_STYLE = {
         "padding_pt": 6,
         "space_before_pt": 8,
         "space_after_pt": 8,
+        "indent_in": 0.25,             # left inset so the box doesn't run full-width
         "caption": {"size_pt": 8, "color": "808080", "italic": True},
     },
     "blockquote": {
@@ -115,15 +139,16 @@ DEFAULT_STYLE = {
         },
     },
     "table": {
-        # Horizontal-rules-only look: a line above and below the header and
-        # under each body row, no vertical lines or side borders.
-        # "edges" lists which borders to draw; omit an edge to leave it off.
-        # Valid edges: top, bottom, left, right, insideH, insideV.
+        # Horizontal-rules-only look: a rule under each body row plus the header
+        # underline (see "header" below). No outer top/bottom edges, no vertical
+        # lines or side borders. "edges" lists which borders to draw; omit an
+        # edge to leave it off. Valid edges: top, bottom, left, right, insideH,
+        # insideV. Add "top"/"bottom" back to box the table.
         "border": {
             "style": "single",
             "width_pt": 0.75,
             "color": "808080",
-            "edges": ["top", "bottom", "insideH"],
+            "edges": ["insideH"],
         },
         # A heavier rule directly under the header row.
         "header": {
@@ -135,15 +160,16 @@ DEFAULT_STYLE = {
         # Balanced vertical padding with a little left inset.
         "cell_margins_pt": {"top": 4, "bottom": 4, "left": 5, "right": 10},
         "width": "full",               # "full" | "auto"
-    },
-    "note": {
-        "indent_in": 0.3,
-        "italic": True,
-        "size_pt": 10,
+        "indent_in": 0.25,             # left inset so the table doesn't run full-width
     },
     "hr": {
+        # A markdown ``---`` renders as a horizontal line when ``rule`` is true.
+        # ``width_pt``/``color`` control the line; ``space_after_pt`` is the gap
+        # below it. Set ``rule: false`` to render just blank space instead.
         "space_after_pt": 6,
-        "rule": False,                 # True -> draw a bottom border line
+        "rule": True,
+        "width_pt": 0.75,
+        "color": "BFBFBF",
     },
     "links": {
         "color": "0563C1",
@@ -291,6 +317,11 @@ class StyleConfig:
 
     def section(self, name: str) -> dict:
         return self._cfg.get(name, {}) or {}
+
+    def top(self, key: str, default=None):
+        """Return a top-level scalar config value (e.g. ``font``), or default."""
+        val = self._cfg.get(key, default)
+        return val if val is not None else default
 
     # -- typed getters ------------------------------------------------------- #
     def num(self, section: str, key: str, default=0):
@@ -444,10 +475,6 @@ def parse_markdown(text: str) -> list:
             blocks.append({"type": "meta", "lines": meta_lines})
             continue
 
-        # Note/callout (starts with >  but after blockquote check)
-        elif line.startswith("> **Note"):
-            blocks.append({"type": "note", "text": line[2:]})
-
         # Bullet list items (including GFM task items: - [ ] / - [x])
         elif line.startswith("- "):
             list_items = []
@@ -530,6 +557,15 @@ def parse_markdown(text: str) -> list:
                   and not lines[i].startswith("**Body"):
                 para_lines.append(lines[i])
                 i += 1
+            # Guard against no progress: if the paragraph collector consumed no
+            # lines (e.g. the current line starts with "---" but isn't exactly a
+            # horizontal rule, so it matches no block and the inner while stops
+            # immediately), emit it as a one-line paragraph and advance so we
+            # don't spin forever on the same line.
+            if not para_lines:
+                blocks.append({"type": "paragraph", "text": lines[i].strip()})
+                i += 1
+                continue
             # Join lines: if a line ends with 2+ spaces (markdown line break), use \n; otherwise space
             joined = ""
             prev_had_break = False
@@ -578,23 +614,16 @@ def _resolve_internal_anchor(target: str, anchors: dict):
 
 
 def _build_hyperlink_run(text: str):
-    """Build a ``w:r`` for a hyperlink, styled with direct color + underline.
+    """Build a ``w:r`` for a hyperlink, referencing the ``Hyperlink`` char style.
 
-    Reads link color/underline from the active style so links render as links
-    without depending on a named "Hyperlink" character style.
+    The generated ``Hyperlink`` character style carries the configured color and
+    underline, so the link is styled consistently and editable in Word.
     """
-    sc = _ACTIVE_STYLE
     run = OxmlElement('w:r')
     rPr = OxmlElement('w:rPr')
-    color_hex = _as_hex(sc.text("links", "color", "0563C1"))
-    if color_hex:
-        color = OxmlElement('w:color')
-        color.set(qn('w:val'), color_hex)
-        rPr.append(color)
-    if sc.flag("links", "underline", True):
-        u = OxmlElement('w:u')
-        u.set(qn('w:val'), 'single')
-        rPr.append(u)
+    rStyle = OxmlElement('w:rStyle')
+    rStyle.set(qn('w:val'), STYLE_HYPERLINK)
+    rPr.append(rStyle)
     run.append(rPr)
     t = OxmlElement('w:t')
     t.set(qn('xml:space'), 'preserve')
@@ -643,6 +672,506 @@ def _apply_page_setup(doc, sc: "StyleConfig"):
     section.bottom_margin = Inches(_coerce_number(margins.get("bottom"), 1.0, "page.margins_in.bottom"))
     section.left_margin = Inches(_coerce_number(margins.get("left"), 1.25, "page.margins_in.left"))
     section.right_margin = Inches(_coerce_number(margins.get("right"), 1.25, "page.margins_in.right"))
+
+
+def _set_default_font(doc, font: str):
+    """Set the document-default font on ``docDefaults/rPrDefault``.
+
+    This is the lowest rung of Word's font-resolution ladder: any run, character
+    style, or paragraph style that does not name its own font inherits this. We
+    write ``w:rFonts`` (ascii/hAnsi/cs) so Latin, high-ANSI, and complex-script
+    text all use it. A non-string/empty ``font`` is ignored (Word then falls back
+    to its own default).
+    """
+    if not font or not isinstance(font, str):
+        return
+    styles_el = doc.styles.element  # <w:styles>
+    docDefaults = styles_el.find(qn('w:docDefaults'))
+    if docDefaults is None:
+        docDefaults = OxmlElement('w:docDefaults')
+        # docDefaults must be the first child of <w:styles>.
+        styles_el.insert(0, docDefaults)
+    rPrDefault = docDefaults.find(qn('w:rPrDefault'))
+    if rPrDefault is None:
+        rPrDefault = OxmlElement('w:rPrDefault')
+        docDefaults.append(rPrDefault)
+    rPr = rPrDefault.find(qn('w:rPr'))
+    if rPr is None:
+        rPr = OxmlElement('w:rPr')
+        rPrDefault.append(rPr)
+    existing = rPr.find(qn('w:rFonts'))
+    if existing is not None:
+        rPr.remove(existing)
+    rFonts = OxmlElement('w:rFonts')
+    for attr in ('ascii', 'hAnsi', 'cs'):
+        rFonts.set(qn(f'w:{attr}'), font)
+    # rFonts must lead the run properties.
+    rPr.insert(0, rFonts)
+
+
+def _get_or_add_style(doc, name: str, style_type):
+    """Return the named style, creating it if the document doesn't have it.
+
+    ``Normal`` (and the built-in ``Heading N``) already exist in a blank doc, so
+    we fetch and update them in place; custom ids are added fresh.
+    """
+    try:
+        return doc.styles[name]
+    except KeyError:
+        return doc.styles.add_style(name, style_type)
+
+
+def _style_outline_level(style, level: int):
+    """Set ``w:outlineLvl`` (0-based) on a paragraph style's ``pPr``.
+
+    Putting the outline level on the style (not each paragraph) is what makes
+    Word's navigation pane and PDF bookmarks treat the style as a heading.
+    """
+    pPr = style.element.get_or_add_pPr()
+    existing = pPr.find(qn('w:outlineLvl'))
+    if existing is not None:
+        pPr.remove(existing)
+    pPr.append(_make_element('w:outlineLvl', val=str(level)))
+
+
+def _style_bottom_rule(style, *, width_pt=1.0, color="000000", space_pt=2):
+    """Add a bottom border (horizontal rule) to a paragraph style's ``pPr``.
+
+    Used for the under-heading rules on H1/H2. ``width_pt`` is the thickness
+    (converted to eighths of a point for ``w:sz``), ``color`` the hex line color,
+    and ``space_pt`` the gap between the text and the line. Replaces any existing
+    ``w:pBdr`` so the call is idempotent, and inserts it in schema order (before
+    ``w:spacing``/``w:ind``).
+    """
+    pPr = style.element.get_or_add_pPr()
+    existing = pPr.find(qn('w:pBdr'))
+    if existing is not None:
+        pPr.remove(existing)
+    pBdr = OxmlElement('w:pBdr')
+    sz = str(max(1, int(round(width_pt * 8))))   # points -> eighths of a point
+    bottom = _make_element('w:bottom', val='single', sz=sz,
+                           space=str(int(round(space_pt))),
+                           color=_as_hex(color) or "000000")
+    pBdr.append(bottom)
+    # w:pBdr must precede w:shd/w:spacing/w:ind in pPr (schema order).
+    following = None
+    for tag in ('w:shd', 'w:spacing', 'w:ind'):
+        following = pPr.find(qn(tag))
+        if following is not None:
+            break
+    if following is not None:
+        following.addprevious(pBdr)
+    else:
+        pPr.append(pBdr)
+
+
+# Theme-font attributes on a style's rFonts. python-docx's default template
+# ships built-in styles (Heading N, Normal) whose rFonts reference these theme
+# fonts (e.g. asciiTheme="majorHAnsi"). A theme reference WINS over an explicit
+# w:ascii/w:hAnsi on the same element, so setting ``style.font.name`` alone is
+# silently ignored by Word — it keeps using the theme font (Calibri). We strip
+# these theme attributes whenever we set an explicit font on a style.
+_RFONTS_THEME_ATTRS = ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme")
+
+
+def _set_style_font(style, font: str):
+    """Set an explicit font on a style and remove any theme-font references.
+
+    ``style.font.name = font`` writes ``w:ascii``/``w:hAnsi``, but leaves any
+    ``*Theme`` attributes in place, which override the explicit face. Removing
+    the theme attributes makes the explicit font actually take effect in Word.
+    """
+    style.font.name = font
+    rPr = style.element.find(qn('w:rPr'))
+    if rPr is None:
+        return
+    rFonts = rPr.find(qn('w:rFonts'))
+    if rFonts is None:
+        return
+    for attr in _RFONTS_THEME_ATTRS:
+        theme_qn = qn(f'w:{attr}')
+        if rFonts.get(theme_qn) is not None:
+            del rFonts.attrib[theme_qn]
+
+
+# Custom style ids for our block/char styles. Heading N reuse Word's built-in
+# names so Word treats them as real headings (nav pane, TOC fields).
+STYLE_QUOTE = "MdQuote"
+STYLE_CODE = "MdCode"
+STYLE_CODE_TITLE = "MdCodeTitle"
+STYLE_CODE_CHAR = "MdCodeChar"
+STYLE_HYPERLINK = "Hyperlink"
+
+# Human-friendly display names shown in Word's style gallery. The styleId (the
+# constants above) stays stable so paragraph references don't break; only the
+# label changes. Avoid colliding with Word's built-in names (e.g. "Quote",
+# "Code") so our styles show up as distinct gallery entries.
+STYLE_DISPLAY_NAMES = {
+    STYLE_QUOTE: "Blockquote",
+    STYLE_CODE: "Code Block",
+    STYLE_CODE_TITLE: "Code Block Title",
+    STYLE_CODE_CHAR: "Inline Code",
+}
+
+
+def _hide_style_from_gallery(style):
+    """Hide a style from Word's gallery / recommended view (keep the definition).
+
+    Clears ``w:qFormat`` (so it drops out of the quick-styles gallery and the
+    "recommended" filter) and sets ``w:semiHidden`` + ``w:unhideWhenUsed`` (so
+    the Styles pane's default view also omits it until it's actually used). The
+    style itself is left intact so any content already using it still renders.
+    """
+    pr = style.element
+    qf = pr.find(qn('w:qFormat'))
+    if qf is not None:
+        pr.remove(qf)
+    # semiHidden + unhideWhenUsed: Word hides these from the default pane view.
+    for tag in ('w:semiHidden', 'w:unhideWhenUsed'):
+        if pr.find(qn(tag)) is None:
+            pr.append(_make_element(tag))
+
+
+# styleIds we keep visible in Word's Styles gallery. Everything else that the
+# base template flags as a quick style gets hidden so the gallery isn't cluttered
+# with styles md_to_docx never applies. Hyperlink is intentionally omitted (Word
+# applies it automatically and doesn't surface it in the gallery anyway).
+_GALLERY_KEEP_IDS = frozenset({
+    "Normal",
+    "Heading1", "Heading2", "Heading3", "Heading4", "Heading5", "Heading6",
+    STYLE_QUOTE, STYLE_CODE, STYLE_CODE_TITLE, STYLE_CODE_CHAR,
+})
+
+
+def _prune_gallery_styles(doc):
+    """Remove gallery visibility from every style we don't apply.
+
+    Sweeps all styles; any that the template flagged as a quick style but that
+    isn't in :data:`_GALLERY_KEEP_IDS` is hidden via
+    :func:`_hide_style_from_gallery`. Leaves our styles (and the essential
+    built-ins) as the only entries in Word's gallery.
+    """
+    for style in doc.styles:
+        try:
+            style_id = style.style_id
+            is_quick = style.quick_style
+        except Exception:
+            continue
+        if is_quick and style_id not in _GALLERY_KEEP_IDS:
+            _hide_style_from_gallery(style)
+
+
+def _mark_style_visible(style, priority=None):
+    """Make a style show up in Word's Styles gallery / pane.
+
+    Word hides styles that aren't flagged as "recommended". Setting
+    ``w:qFormat`` (via ``quick_style``) surfaces the style in the Home-tab
+    gallery and the Styles pane's default view; ``w:uiPriority`` (via
+    ``priority``) controls its sort order. Also clears ``semiHidden`` and
+    ``unhideWhenUsed`` if present so nothing suppresses it.
+    """
+    style.quick_style = True
+    if priority is not None:
+        style.priority = priority
+    # Clear any hide flags Word might otherwise honor.
+    pr = style.element
+    for tag in ('w:semiHidden', 'w:unhideWhenUsed'):
+        el = pr.find(qn(tag))
+        if el is not None:
+            pr.remove(el)
+    return style
+
+
+def _apply_code_box_to_pPr(pPr, fill, space_pt):
+    """Add the code-block shaded box (four-sided border + shading) to a ``pPr``.
+
+    The border color matches the fill so it's invisible; its ``w:space`` acts as
+    interior padding. Inserts ``w:pBdr`` then ``w:shd`` in schema order (both
+    precede ``w:spacing``/``w:ind``). Idempotent: removes any existing pBdr/shd.
+    Shared by the ``Code Block`` style generator and the direct-formatting helper.
+    """
+    hexfill = _as_hex(fill) or "F2F2F2"
+    for tag in ('w:pBdr', 'w:shd'):
+        existing = pPr.find(qn(tag))
+        if existing is not None:
+            pPr.remove(existing)
+
+    pBdr = OxmlElement('w:pBdr')
+    for side in ('top', 'left', 'bottom', 'right'):
+        pBdr.append(_make_element(f'w:{side}', val='single', sz='4',
+                                  space=str(int(round(space_pt))), color=hexfill))
+    shd = OxmlElement('w:shd')
+    shd.set(qn('w:val'), 'clear')
+    shd.set(qn('w:color'), 'auto')
+    shd.set(qn('w:fill'), hexfill)
+
+    # pBdr and shd must precede spacing/ind in pPr (schema order).
+    following = None
+    for tag in ('w:spacing', 'w:ind'):
+        following = pPr.find(qn(tag))
+        if following is not None:
+            break
+    if following is not None:
+        following.addprevious(pBdr)
+        following.addprevious(shd)
+    else:
+        pPr.append(pBdr)
+        pPr.append(shd)
+
+
+def _define_paragraph_style(doc, name, *, display_name=None, font=None,
+                            size_pt=None, color=None,
+                            bold=None, italic=None, space_before_pt=None,
+                            space_after_pt=None, line_spacing=None,
+                            left_indent_in=None, right_indent_in=None,
+                            outline_level=None, base="Normal"):
+    """Create/update a named paragraph style from config values.
+
+    ``name`` is the styleId (stable, referenced by paragraphs); ``display_name``
+    is the human-friendly label Word shows in its style gallery (defaults to
+    ``name``). ``font=None`` leaves the style's font unset so it inherits (from
+    the base style or the document default) — this is how "null font means
+    inherit" works. Every other ``None`` argument is likewise skipped.
+    """
+    style = _get_or_add_style(doc, name, WD_STYLE_TYPE.PARAGRAPH)
+    if display_name is not None:
+        style.name = display_name
+    if base is not None and name != "Normal":
+        # ``base`` may be a styleId (e.g. "MdCode"); prefer its display name so
+        # the lookup doesn't hit python-docx's deprecated by-id path.
+        base_key = STYLE_DISPLAY_NAMES.get(base, base)
+        try:
+            style.base_style = doc.styles[base_key]
+        except (KeyError, Exception):
+            pass
+    fmt = style.font
+    if font is not None:
+        _set_style_font(style, font)
+    if size_pt is not None:
+        fmt.size = Pt(size_pt)
+    if color is not None:
+        fmt.color.rgb = color if isinstance(color, RGBColor) \
+            else RGBColor.from_string(str(color).upper())
+    if bold is not None:
+        fmt.bold = bold
+    if italic is not None:
+        fmt.italic = italic
+    pf = style.paragraph_format
+    if space_before_pt is not None:
+        pf.space_before = Pt(space_before_pt)
+    if space_after_pt is not None:
+        pf.space_after = Pt(space_after_pt)
+    if line_spacing is not None:
+        pf.line_spacing = line_spacing
+    if left_indent_in is not None:
+        pf.left_indent = Inches(left_indent_in)
+    if right_indent_in is not None:
+        pf.right_indent = Inches(right_indent_in)
+    if outline_level is not None:
+        _style_outline_level(style, outline_level)
+    return style
+
+
+def _define_char_style(doc, name, *, display_name=None, font=None, size_pt=None,
+                       color=None, underline=None, fill=None):
+    """Create/update a named character style from config values.
+
+    ``name`` is the styleId; ``display_name`` is the gallery label (defaults to
+    ``name``). Like the paragraph variant, ``None`` fields are left unset so they
+    inherit. ``fill`` adds run-shading (``w:shd``) onto the style's run
+    properties.
+    """
+    style = _get_or_add_style(doc, name, WD_STYLE_TYPE.CHARACTER)
+    if display_name is not None:
+        style.name = display_name
+    fmt = style.font
+    if font is not None:
+        _set_style_font(style, font)
+    if size_pt is not None:
+        fmt.size = Pt(size_pt)
+    if color is not None:
+        fmt.color.rgb = color if isinstance(color, RGBColor) \
+            else RGBColor.from_string(str(color).upper())
+    if underline is not None:
+        fmt.underline = underline
+    if fill is not None:
+        hexfill = _as_hex(fill)
+        if hexfill:
+            rPr = style.element.get_or_add_rPr()
+            existing = rPr.find(qn('w:shd'))
+            if existing is not None:
+                rPr.remove(existing)
+            shd = OxmlElement('w:shd')
+            shd.set(qn('w:val'), 'clear')
+            shd.set(qn('w:color'), 'auto')
+            shd.set(qn('w:fill'), hexfill)
+            rPr.append(shd)
+    return style
+
+
+def _build_styles(doc, sc: "StyleConfig"):
+    """Generate the document default font + all named styles from config.
+
+    Runs once at the start of ``build_docx`` before any content is added, so
+    every paragraph/run can reference a style by name.
+    """
+    # 1. Document default font: everything inherits this unless overridden.
+    _set_default_font(doc, sc.top("font", "Aptos"))
+
+    # 2. Normal (body). font=None => inherit the document default.
+    _define_paragraph_style(
+        doc, "Normal",
+        font=sc.text("body", "font"),
+        size_pt=sc.num("body", "size_pt", 11),
+        color=sc.color("body", "color", default="000000"),
+        space_before_pt=sc.num("body", "space_before_pt", 0),
+        space_after_pt=sc.num("body", "space_after_pt", 8),
+        line_spacing=sc.num("body", "line_spacing", 1.15),
+        base=None,
+    )
+
+    # 3. Heading 1..6. Own font wins; otherwise inherit the top-level
+    #    heading_font (so the heading face is set in one place).
+    heading_font = sc.top("heading_font", "Aptos Display")
+    for level in range(1, 7):
+        h = sc.heading(level)
+        own_font = h.get("font")
+        font = own_font if own_font is not None else heading_font
+        heading_style = _define_paragraph_style(
+            doc, f"Heading {level}",
+            font=font,
+            size_pt=_coerce_number(h.get("size_pt"), 11, f"headings.{level}.size_pt"),
+            color=_coerce_color(h.get("color"), "000000", f"headings.{level}.color"),
+            bold=bool(h.get("bold", False)),
+            italic=bool(h.get("italic", False)),
+            space_before_pt=_coerce_number(h.get("space_before_pt"), 0,
+                                           f"headings.{level}.space_before_pt"),
+            space_after_pt=_coerce_number(h.get("space_after_pt"), 0,
+                                          f"headings.{level}.space_after_pt"),
+            outline_level=level - 1,
+        )
+        # Optional under-heading rule (bottom border on the style).
+        rule = h.get("rule")
+        if isinstance(rule, dict):
+            _style_bottom_rule(
+                heading_style,
+                width_pt=_coerce_number(rule.get("width_pt"), 1.0,
+                                        f"headings.{level}.rule.width_pt"),
+                color=_as_hex(rule.get("color")) or "000000",
+                space_pt=_coerce_number(rule.get("space_pt"), 2,
+                                        f"headings.{level}.rule.space_pt"),
+            )
+
+    # 4. Blockquote paragraph style (indent + spacing + the left bar). Folding
+    #    the bar into the style's pPr — rather than stamping it on each
+    #    paragraph — makes the whole blockquote look editable in Word by editing
+    #    the one style.
+    quote_style = _define_paragraph_style(
+        doc, STYLE_QUOTE,
+        display_name=STYLE_DISPLAY_NAMES[STYLE_QUOTE],
+        space_after_pt=sc.num("blockquote", "space_after_pt", 4),
+        left_indent_in=sc.num("blockquote", "indent_in", 0.25),
+    )
+    quote_pPr = quote_style.element.get_or_add_pPr()
+    existing_bdr = quote_pPr.find(qn('w:pBdr'))
+    if existing_bdr is not None:
+        quote_pPr.remove(existing_bdr)
+    quote_pBdr = _build_blockquote_pBdr(
+        color=sc.text("blockquote", "bar_color", "999999"),
+        width_pt=sc.num("blockquote", "bar_width_pt", 2.25),
+        gap_pt=sc.num("blockquote", "bar_gap_pt", 12),
+    )
+    # w:pBdr must precede w:shd/w:spacing/w:ind in pPr (schema order); insert it
+    # before whichever of those exists, else append.
+    following = None
+    for tag in ('w:shd', 'w:spacing', 'w:ind'):
+        following = quote_pPr.find(qn(tag))
+        if following is not None:
+            break
+    if following is not None:
+        following.addprevious(quote_pBdr)
+    else:
+        quote_pPr.append(quote_pBdr)
+    # Surface it in Word's Styles gallery / pane (priority just after headings).
+    _mark_style_visible(quote_style, priority=20)
+
+    # 5. Code-block paragraph style. The shaded box (four-sided border + fill)
+    #    lives IN the style's pPr so it's editable in Word.
+    #    The box border carries a w:space (from padding_pt) that offsets the
+    #    border OUTWARD from the text. To keep the box's left edge flush with
+    #    body text, indent the paragraph left by that same padding; the right
+    #    inset is padding + the requested right inset so the box stops short of
+    #    the margin.
+    cb_pad_pt = sc.num("code_block", "padding_pt", 6)
+    cb_pad_in = cb_pad_pt / 72.0
+    cb_right_inset = sc.num("code_block", "indent_in", 0.25)
+    cb_fill = sc.text("code_block", "fill", "F2F2F2")
+    code_style = _define_paragraph_style(
+        doc, STYLE_CODE,
+        display_name=STYLE_DISPLAY_NAMES[STYLE_CODE],
+        font=sc.text("code_block", "font", "Consolas"),
+        size_pt=sc.num("code_block", "size_pt", 9),
+        space_before_pt=sc.num("code_block", "space_before_pt", 8),
+        space_after_pt=sc.num("code_block", "space_after_pt", 8),
+        left_indent_in=cb_pad_in,
+        right_indent_in=cb_right_inset + cb_pad_in,
+    )
+    _apply_code_box_to_pPr(code_style.element.get_or_add_pPr(), cb_fill, cb_pad_pt)
+    _mark_style_visible(code_style, priority=21)
+
+    # 5b. Code-block title/caption style (the language label). Based on Code
+    #     Block so it inherits the box/indent/shading; overrides just the run
+    #     look (small italic gray). ``next`` returns to Code Block after it.
+    caption_cfg = sc.section("code_block").get("caption", {}) or {}
+    title_style = _define_paragraph_style(
+        doc, STYLE_CODE_TITLE,
+        display_name=STYLE_DISPLAY_NAMES[STYLE_CODE_TITLE],
+        base=STYLE_CODE,
+        size_pt=_coerce_number(caption_cfg.get("size_pt"), 8,
+                               "code_block.caption.size_pt"),
+        color=_coerce_color(caption_cfg.get("color"), "808080",
+                            "code_block.caption.color"),
+        italic=bool(caption_cfg.get("italic", True)),
+    )
+    # "next style" = Code Block, so Enter after a title continues code.
+    # w:next must sit after w:basedOn (schema order), before pPr/rPr.
+    tel = title_style.element
+    existing_next = tel.find(qn('w:next'))
+    if existing_next is not None:
+        tel.remove(existing_next)
+    tnext = OxmlElement('w:next')
+    tnext.set(qn('w:val'), STYLE_CODE)
+    based = tel.find(qn('w:basedOn'))
+    if based is not None:
+        based.addnext(tnext)
+    else:
+        name_el = tel.find(qn('w:name'))
+        (name_el if name_el is not None else tel).addnext(tnext) \
+            if name_el is not None else tel.insert(0, tnext)
+    _mark_style_visible(title_style, priority=21)
+
+    # 6. Inline-code character style (monospace font/size, optional color/fill).
+    code_char_style = _define_char_style(
+        doc, STYLE_CODE_CHAR,
+        display_name=STYLE_DISPLAY_NAMES[STYLE_CODE_CHAR],
+        font=sc.text("inline_code", "font", "Consolas"),
+        size_pt=sc.num("inline_code", "size_pt", 10),
+        color=sc.color("inline_code", "color"),
+        fill=sc.text("inline_code", "fill"),
+    )
+    _mark_style_visible(code_char_style, priority=22)
+
+    # 8. Hyperlink character style (color + underline from links.*).
+    _define_char_style(
+        doc, STYLE_HYPERLINK,
+        color=sc.color("links", "color", default="0563C1"),
+        underline=sc.flag("links", "underline", True),
+    )
+
+    # 9. Declutter Word's gallery: hide the many template quick styles we never
+    #    apply (Title, Subtitle, Quote, Intense Quote, List Paragraph, etc.),
+    #    leaving only our styles and the essential headings/Normal.
+    _prune_gallery_styles(doc)
 
 
 def _apply_paragraph_format(paragraph, *, space_before_pt=None, space_after_pt=None,
@@ -924,15 +1453,10 @@ _URL_TRAILING_PUNCT = ".,;:!?)]}'\""
 def _style_run(run, flags):
     """Apply the accumulated formatting flags to a run, using the active style.
 
-    Body font/size/color come from ``body.*``; inline ``code`` spans use
-    ``inline_code.*``. Bold/italic/strike are markdown-driven flags.
+    Normal runs inherit their font/size/color from the paragraph style (or the
+    document default) — we do NOT stamp those properties directly. Only emphasis
+    (bold/italic/strike) and the inline-code character style are set here.
     """
-    sc = _ACTIVE_STYLE
-    # Base body formatting for every inline run.
-    _apply_run_format(run,
-                      font=sc.text("body", "font"),
-                      size_pt=sc.num("body", "size_pt", 11),
-                      color=sc.color("body", "color", default="000000"))
     if "bold" in flags:
         run.bold = True
     if "italic" in flags:
@@ -940,11 +1464,17 @@ def _style_run(run, flags):
     if "strike" in flags:
         run.font.strike = True
     if "code" in flags:
-        _apply_run_format(run,
-                          font=sc.text("inline_code", "font", "Consolas"),
-                          size_pt=sc.num("inline_code", "size_pt", 10),
-                          color=sc.color("inline_code", "color"),
-                          fill=sc.text("inline_code", "fill"))
+        # Apply the inline-code character style so inline code is monospace.
+        try:
+            run.style = run.part.document.styles[STYLE_DISPLAY_NAMES[STYLE_CODE_CHAR]]
+        except (KeyError, Exception):
+            # Fallback: stamp the code font directly if the style is missing.
+            sc = _ACTIVE_STYLE
+            _apply_run_format(run,
+                              font=sc.text("inline_code", "font", "Consolas"),
+                              size_pt=sc.num("inline_code", "size_pt", 10),
+                              color=sc.color("inline_code", "color"),
+                              fill=sc.text("inline_code", "fill"))
 
 
 def _emit_run(paragraph, text, flags):
@@ -1034,26 +1564,35 @@ BLOCKQUOTE_BAR_SIZE = '18'        # border thickness in eighths of a point (~2.2
 BLOCKQUOTE_BAR_SPACE = '12'       # space between bar and text, in points
 
 
-def _apply_blockquote_bar(paragraph, color=BLOCKQUOTE_BAR_COLOR,
-                          width_pt=2.25, gap_pt=12):
-    """Add a left vertical bar (paragraph border) to a blockquote paragraph.
+def _build_blockquote_pBdr(color=BLOCKQUOTE_BAR_COLOR, width_pt=2.25, gap_pt=12):
+    """Build a ``w:pBdr`` with a single left bar for a blockquote.
 
     ``width_pt`` is the bar thickness in points (converted to the eighths-of-a-
     point ``sz`` unit); ``gap_pt`` is the space between bar and text in points.
-    Applied as a direct border so it needs no named style.
+    Shared by the ``MdQuote`` style generator and the direct-formatting helper.
     """
-    pPr = paragraph._p.get_or_add_pPr()
-    # Remove any existing borders so repeated calls stay idempotent.
-    existing = pPr.find(qn('w:pBdr'))
-    if existing is not None:
-        pPr.remove(existing)
     pBdr = OxmlElement('w:pBdr')
     sz = str(max(1, int(round(width_pt * 8))))   # points -> eighths of a point
     left = _make_element('w:left', val='single', sz=sz,
                          space=str(int(round(gap_pt))),
                          color=_as_hex(color) or "999999")
     pBdr.append(left)
-    pPr.append(pBdr)
+    return pBdr
+
+
+def _apply_blockquote_bar(paragraph, color=BLOCKQUOTE_BAR_COLOR,
+                          width_pt=2.25, gap_pt=12):
+    """Add a left vertical bar (paragraph border) to a blockquote paragraph.
+
+    Applied as a direct border. Kept for callers that style a paragraph without
+    the ``MdQuote`` style; normal blockquotes now get the bar from the style.
+    """
+    pPr = paragraph._p.get_or_add_pPr()
+    # Remove any existing borders so repeated calls stay idempotent.
+    existing = pPr.find(qn('w:pBdr'))
+    if existing is not None:
+        pPr.remove(existing)
+    pPr.append(_build_blockquote_pBdr(color=color, width_pt=width_pt, gap_pt=gap_pt))
 
 
 # Code-block styling: a light gray fill plus a same-color border on all four
@@ -1066,34 +1605,60 @@ CODE_BLOCK_BORDER_SPACE = '6'     # padding between border and text, in points
 
 def _apply_code_block_box(paragraph, fill=CODE_BLOCK_FILL,
                           space=CODE_BLOCK_BORDER_SPACE):
-    """Give a code paragraph a shaded background with interior padding.
+    """Give a code paragraph a shaded background with interior padding (direct).
 
-    Adds paragraph shading and a four-sided border whose color matches the fill,
-    so the border is invisible but its ``w:space`` acts as left/right padding.
-    Vertical breathing room comes from the paragraph's space before/after.
+    Kept as a direct-formatting utility; the normal render path now carries the
+    box on the ``Code Block`` style instead. Delegates to the shared builder.
     """
-    pPr = paragraph._p.get_or_add_pPr()
-    fill = _as_hex(fill) or "F2F2F2"
+    _apply_code_box_to_pPr(paragraph._p.get_or_add_pPr(), fill,
+                           _coerce_number(space, 6, "code_block.padding_pt"))
 
-    # Shading (the gray fill).
-    existing_shd = pPr.find(qn('w:shd'))
-    if existing_shd is not None:
-        pPr.remove(existing_shd)
-    shd = OxmlElement('w:shd')
-    shd.set(qn('w:val'), 'clear')
-    shd.set(qn('w:color'), 'auto')
-    shd.set(qn('w:fill'), fill)
-    pPr.append(shd)
 
-    # Four-sided border, same color as the fill, used purely for its spacing.
-    existing_bdr = pPr.find(qn('w:pBdr'))
-    if existing_bdr is not None:
-        pPr.remove(existing_bdr)
-    pBdr = OxmlElement('w:pBdr')
-    for side in ('top', 'left', 'bottom', 'right'):
-        pBdr.append(_make_element(f'w:{side}', val='single', sz='4',
-                                  space=space, color=fill))
-    pPr.append(pBdr)
+def _split_table_row(line: str):
+    """Split a markdown table row into cell strings.
+
+    Splits on unescaped ``|`` only, so ``\\|`` is treated as a literal pipe
+    inside a cell (GFM). The escaped pipe is unescaped to ``|`` in the result,
+    and ``<br>`` is converted to a newline so it renders as an in-cell line
+    break. Leading/trailing empty cells (from the surrounding ``|``) are dropped.
+    """
+    # Split on a pipe not preceded by a backslash.
+    parts = re.split(r"(?<!\\)\|", line)
+    # Drop the empty first/last segments produced by the leading/trailing pipe.
+    if parts and parts[0].strip() == "":
+        parts = parts[1:]
+    if parts and parts[-1].strip() == "":
+        parts = parts[:-1]
+    cells = []
+    for c in parts:
+        c = c.replace("\\|", "|")            # literal pipe
+        c = re.sub(r"<br\s*/?>", "\n", c, flags=re.IGNORECASE)  # in-cell break
+        cells.append(c.strip())
+    return cells
+
+
+def _parse_table_alignments(separator_line: str):
+    """Parse a markdown table separator row into per-column alignments.
+
+    Returns a list of ``WD_ALIGN_PARAGRAPH`` values (or ``None`` for the default
+    left) — one per column. Alignment comes from the colons in each cell:
+    ``:---`` left, ``:---:`` center, ``---:`` right, ``---`` unspecified (None).
+    """
+    aligns = []
+    cells = separator_line.strip().split("|")[1:-1]
+    for cell in cells:
+        c = cell.strip()
+        left = c.startswith(":")
+        right = c.endswith(":")
+        if left and right:
+            aligns.append(WD_ALIGN_PARAGRAPH.CENTER)
+        elif right:
+            aligns.append(WD_ALIGN_PARAGRAPH.RIGHT)
+        elif left:
+            aligns.append(WD_ALIGN_PARAGRAPH.LEFT)
+        else:
+            aligns.append(None)  # unspecified -> default (left)
+    return aligns
 
 
 def _apply_custom_table_style(doc, table, sc: "StyleConfig"):
@@ -1109,7 +1674,7 @@ def _apply_custom_table_style(doc, table, sc: "StyleConfig"):
     # Which edges get a visible line; any others are explicitly turned off.
     enabled_edges = border.get("edges")
     if enabled_edges is None:
-        enabled_edges = ["top", "bottom", "insideH"]
+        enabled_edges = ["insideH"]
     enabled_edges = set(enabled_edges)
 
     margins = sc.section("table").get("cell_margins_pt", {}) or {}
@@ -1154,12 +1719,36 @@ def _apply_custom_table_style(doc, table, sc: "StyleConfig"):
     tblCellMar.append(_make_element('w:right', w=_pt_to_dxa(margins.get("right"), 5.4), type='dxa'))
     tblPr.append(tblCellMar)
 
+    # Right-only inset: the table is narrowed on the right so it doesn't run the
+    # full content width. For the LEFT edge, Word insets cell text from the table
+    # border by the cell's left margin; a small positive tblInd equal to that
+    # margin lines the table border up so cell text sits near the body margin.
+    indent_in = _coerce_number(sc.section("table").get("indent_in"), 0.0,
+                               "table.indent_in")
+    cell_left_dxa = int(_pt_to_dxa(margins.get("left"), 5.4))
+    existing_ind = tblPr.find(qn('w:tblInd'))
+    if existing_ind is not None:
+        tblPr.remove(existing_ind)
+    tblPr.append(_make_element('w:tblInd', w=str(cell_left_dxa), type='dxa'))
+
     # Width: full (100%) or auto.
     existing_w = tblPr.find(qn('w:tblW'))
     if existing_w is not None:
         tblPr.remove(existing_w)
     if sc.text("table", "width", "full") == "full":
-        tblPr.append(_make_element('w:tblW', w='5000', type='pct'))
+        # A full-width table is narrowed by the inset (as a fraction of the
+        # content width) so its right edge stops short of the right margin.
+        pct = 5000
+        if indent_in > 0:
+            try:
+                section = doc.sections[0]
+                content_in = (section.page_width - section.left_margin
+                              - section.right_margin) / 914400.0  # EMU -> in
+                if content_in > 0:
+                    pct = max(0, int(round(5000 * (1 - indent_in / content_in))))
+            except Exception:
+                pass
+        tblPr.append(_make_element('w:tblW', w=str(pct), type='pct'))
     else:
         tblPr.append(_make_element('w:tblW', w='0', type='auto'))
 
@@ -1211,8 +1800,12 @@ def _apply_table_header(table, sc: "StyleConfig"):
                     run.bold = True
 
 
-def _fix_narrow_column_widths(table):
-    """After cells are populated, set proportional column widths based on content."""
+def _fix_narrow_column_widths(table, available_twips=9360):
+    """After cells are populated, set proportional column widths based on content.
+
+    ``available_twips`` is the usable width the columns must sum to (content
+    width minus any table indent). Defaults to 6.5in (9360 twips).
+    """
     tbl = table._tbl
     num_cols = len(table.columns)
     if num_cols < 2:
@@ -1226,16 +1819,13 @@ def _fix_narrow_column_widths(table):
                 text_len = len(cell.text)
                 col_max_len[c_idx] = max(col_max_len[c_idx], text_len)
 
-    # Total page width in twips (6.5 inches = 9360 twips)
-    PAGE_WIDTH_TWIPS = 9360
-
     # Calculate proportional widths based on content length
     # Use sqrt to dampen the ratio — prevents huge disparities
     import math
     col_weights = [math.sqrt(max(length, 1)) for length in col_max_len]
     total_weight = sum(col_weights)
 
-    col_widths_twips = [int(PAGE_WIDTH_TWIPS * w / total_weight) for w in col_weights]
+    col_widths_twips = [int(available_twips * w / total_weight) for w in col_weights]
 
     # Set gridCol widths in tblGrid
     tblGrid = tbl.find(qn('w:tblGrid'))
@@ -1437,35 +2027,20 @@ def _set_outline_level(paragraph, level: int):
 
 
 def _add_heading(doc, text: str, level: int, sc: "StyleConfig"):
-    """Add a heading as a directly-formatted paragraph (no named style).
+    """Add a heading using the generated ``Heading N`` paragraph style.
 
-    Applies the per-level font/size/color/bold/italic and spacing from the style
-    config, sets the outline level, and returns the paragraph. Inline markdown in
-    the heading text is not re-parsed (headings are plain text today).
+    The style carries font/size/color/bold/italic/spacing and the outline level.
+    No direct run formatting is stamped — this is the key difference from the old
+    direct-formatting approach.
     """
-    h = sc.heading(level)
-    p = doc.add_paragraph()
-    _apply_paragraph_format(
-        p,
-        space_before_pt=_coerce_number(h.get("space_before_pt"), 0, f"headings.{level}.space_before_pt"),
-        space_after_pt=_coerce_number(h.get("space_after_pt"), 0, f"headings.{level}.space_after_pt"),
-    )
-    run = p.add_run(text)
-    _apply_run_format(
-        run,
-        font=h.get("font"),
-        size_pt=_coerce_number(h.get("size_pt"), 11, f"headings.{level}.size_pt"),
-        color=_coerce_color(h.get("color"), "000000", f"headings.{level}.color"),
-        bold=bool(h.get("bold", False)),
-        italic=bool(h.get("italic", False)),
-    )
-    _set_outline_level(p, level)
+    p = doc.add_paragraph(style=f"Heading {level}")
+    p.add_run(text)
     return p
 
 
 def build_docx(blocks: list, output_path: str, title: str, author: str, date: str,
                base_dir=None, allow_remote_images=False, style=None):
-    """Build the DOCX from parsed blocks, applying direct formatting from ``style``.
+    """Build the DOCX from parsed blocks, applying named styles from ``style``.
 
     ``base_dir`` resolves relative image paths; it defaults to the current
     working directory when not supplied. ``allow_remote_images`` enables
@@ -1483,9 +2058,10 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
     global _ACTIVE_STYLE
     _ACTIVE_STYLE = sc
 
-    # Start from a blank document and style everything as direct formatting.
+    # Start from a blank document, generate named styles, then add content.
     doc = Document()
     _apply_page_setup(doc, sc)
+    _build_styles(doc, sc)
 
     # Build the heading anchor map (also tags each heading block with a
     # "_bookmark" name) so TOC links can resolve to real internal hyperlinks.
@@ -1506,12 +2082,14 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
         elif block["type"] == "hr":
             p = doc.add_paragraph()
             _apply_paragraph_format(p, space_after_pt=sc.num("hr", "space_after_pt", 6))
-            # Optionally draw an actual horizontal rule as a bottom border.
-            if sc.flag("hr", "rule", False):
+            # Draw the horizontal line as a bottom border, width/color from config.
+            if sc.flag("hr", "rule", True):
+                sz = str(max(1, int(round(sc.num("hr", "width_pt", 0.75) * 8))))
                 pPr = p._p.get_or_add_pPr()
                 pBdr = OxmlElement('w:pBdr')
-                pBdr.append(_make_element('w:bottom', val='single', sz='6',
-                                          space='1', color='BFBFBF'))
+                pBdr.append(_make_element('w:bottom', val='single', sz=sz,
+                                          space='1',
+                                          color=_as_hex(sc.text("hr", "color", "BFBFBF")) or "BFBFBF"))
                 pPr.append(pBdr)
 
         elif block["type"] == "meta":
@@ -1526,20 +2104,11 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                 first = False
 
         elif block["type"] == "blockquote":
-            # Blockquote — a directly-formatted paragraph with a left bar. Split
-            # into paragraphs on empty lines; one docx paragraph per chunk.
-            bq_indent = sc.num("blockquote", "indent_in", 0.25)
-            bq_after = sc.num("blockquote", "space_after_pt", 4)
-            bq_color = sc.text("blockquote", "bar_color", "999999")
-            bq_width = sc.num("blockquote", "bar_width_pt", 2.25)
-            bq_gap = sc.num("blockquote", "bar_gap_pt", 12)
-
+            # Blockquote — uses the MdQuote paragraph style, which now carries
+            # both the indent/spacing AND the left bar. Split into paragraphs on
+            # empty lines.
             def _emit_quote(para_lines):
-                p = doc.add_paragraph()
-                _apply_paragraph_format(p, space_after_pt=bq_after,
-                                        left_indent_in=bq_indent)
-                _apply_blockquote_bar(p, color=bq_color, width_pt=bq_width,
-                                      gap_pt=bq_gap)
+                p = doc.add_paragraph(style=STYLE_DISPLAY_NAMES[STYLE_QUOTE])
                 first = True
                 for pl in para_lines:
                     if not first:
@@ -1562,48 +2131,33 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                 _emit_quote(current_para_lines)
 
         elif block["type"] == "code_block":
-            # Render as monospace text in a shaded, padded box (all from config).
-            cb_font = sc.text("code_block", "font", "Consolas")
-            cb_size = sc.num("code_block", "size_pt", 9)
-            cb_fill = sc.text("code_block", "fill", "F2F2F2")
-            cb_pad = sc.num("code_block", "padding_pt", 6)
-            caption_cfg = sc.section("code_block").get("caption", {}) or {}
-
-            p = doc.add_paragraph()
-            _apply_paragraph_format(
-                p,
-                space_before_pt=sc.num("code_block", "space_before_pt", 8),
-                space_after_pt=sc.num("code_block", "space_after_pt", 8),
-            )
-            # Shaded background plus a same-color border that pads the text.
-            _apply_code_block_box(p, fill=cb_fill, space=str(int(round(cb_pad))))
-            # Optional language caption; only when a language was captured.
+            # The shaded box + spacing come from the Code Block paragraph style.
+            # A language caption (when present) is a separate paragraph using the
+            # Code Block Title style, which is based on Code Block so it shares
+            # the same box (the two paragraphs read as one continuous box).
             language = block.get("language")
-            first_line = True
             if language:
-                caption = p.add_run(language)
-                _apply_run_format(
-                    caption,
-                    font=cb_font,
-                    size_pt=_coerce_number(caption_cfg.get("size_pt"), 8, "code_block.caption.size_pt"),
-                    color=_coerce_color(caption_cfg.get("color"), "808080", "code_block.caption.color"),
-                    italic=bool(caption_cfg.get("italic", True)),
-                )
-                first_line = False
-            # Add each line with line breaks between them
+                cap = doc.add_paragraph(style=STYLE_DISPLAY_NAMES[STYLE_CODE_TITLE])
+                cap.add_run(language)
+
+            p = doc.add_paragraph(style=STYLE_DISPLAY_NAMES[STYLE_CODE])
+            # Add each line with line breaks between them. Font/size/box come
+            # from the Code Block paragraph style.
             for line_idx, code_line in enumerate(block["lines"]):
-                if line_idx > 0 or not first_line:
+                if line_idx > 0:
                     p.add_run().add_break()
-                run = p.add_run(code_line)
-                _apply_run_format(run, font=cb_font, size_pt=cb_size)
+                p.add_run(code_line)
 
         elif block["type"] == "table":
-            # Parse table into rows
+            # Parse table into rows, capturing per-column alignment from the
+            # separator row (:--- left, :---: center, ---: right).
             rows = []
+            col_align = []
             for tl in block["lines"]:
                 if re.match(r"^\|[-| :]+\|$", tl.strip()):
-                    continue  # skip separator row
-                cells = [c.strip() for c in tl.split("|")[1:-1]]
+                    col_align = _parse_table_alignments(tl)
+                    continue  # skip the separator row itself
+                cells = _split_table_row(tl)
                 if cells:
                     rows.append(cells)
 
@@ -1621,11 +2175,25 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                             # body paragraph's space_before/after.
                             _apply_paragraph_format(para, space_before_pt=0,
                                                     space_after_pt=0)
+                            # Per-column alignment from the separator row.
+                            align = col_align[c_idx] if c_idx < len(col_align) else None
+                            if align is not None:
+                                para.alignment = align
                             add_formatted_text(para, cell, anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
                 # Emphasize the header row, then size columns to content.
                 _apply_table_header(table, sc)
-                _fix_narrow_column_widths(table)
+                # Columns must sum to the content width minus the table indent.
+                try:
+                    section = doc.sections[0]
+                    content_twips = int((section.page_width - section.left_margin
+                                         - section.right_margin) / 914400.0 * 1440)
+                except Exception:
+                    content_twips = 9360
+                table_indent_in = _coerce_number(
+                    sc.section("table").get("indent_in"), 0.0, "table.indent_in")
+                avail_twips = max(1440, content_twips - int(round(table_indent_in * 1440)))
+                _fix_narrow_column_widths(table, available_twips=avail_twips)
                 # Add a small spacer paragraph after the table
                 spacer = doc.add_paragraph()
                 spacer.paragraph_format.space_before = Pt(8)
@@ -1633,22 +2201,8 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                 spacer_run = spacer.add_run()
                 spacer_run.font.size = Pt(2)
 
-        elif block["type"] == "note":
-            p = doc.add_paragraph()
-            _apply_paragraph_format(p, left_indent_in=sc.num("note", "indent_in", 0.3))
-            run = p.add_run(block["text"])
-            _apply_run_format(run,
-                              size_pt=sc.num("note", "size_pt", 10),
-                              italic=sc.flag("note", "italic", True))
-
         elif block["type"] == "paragraph":
-            p = doc.add_paragraph()
-            _apply_paragraph_format(
-                p,
-                space_before_pt=sc.num("body", "space_before_pt", 0),
-                space_after_pt=sc.num("body", "space_after_pt", 8),
-                line_spacing=sc.num("body", "line_spacing", 1.15),
-            )
+            p = doc.add_paragraph()  # uses Normal style (body font/spacing)
             add_formatted_text(p, block["text"], anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
 
@@ -1667,11 +2221,9 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                 _apply_paragraph_format(p, space_after_pt=bullet_after)
                 _set_list_numbering(p, list_num_id, ilvl=0)
                 # Task items get a checkbox glyph prefix (☑ checked / ☐ unchecked).
-                # Give it the body font so Word doesn't substitute another font
-                # (e.g. Cambria) for the Unicode checkbox symbol.
+                # The font inherits from the document default via Normal style.
                 if checked is not None:
-                    cb_run = p.add_run("\u2611 " if checked else "\u2610 ")
-                    _apply_run_format(cb_run, font=sc.text("body", "font"))
+                    p.add_run("\u2611 " if checked else "\u2610 ")
                 add_formatted_text(p, item_text, anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
 

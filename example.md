@@ -123,6 +123,15 @@ plain code block
 | Images         | Yes       | Local embed; remote is opt-in  |
 | Autolinks      | Yes       | Bare and `<angle>` URLs        |
 
+Column alignment from the separator row (`:---` left, `:---:` center, `---:`
+right). The header and body cells in each column should share the alignment:
+
+| Left aligned | Center aligned | Right aligned |
+|:-------------|:--------------:|--------------:|
+| apple        | banana         |          1.00 |
+| fig          | kiwi           |         42.50 |
+| a much longer cell | short    |        100.00 |
+
 ## Blockquote
 
 > This is a blockquote. It should render with a gray vertical bar on the left.

@@ -1,3 +1,5 @@
+﻿font: Aptos
+heading_font: Aptos Display
 page:
   size: letter
   margins_in:
@@ -6,7 +8,7 @@ page:
     left: 1.25
     right: 1.25
 body:
-  font: Calibri
+  font: null
   size_pt: 11
   color: '000000'
   space_before_pt: 0
@@ -14,53 +16,65 @@ body:
   line_spacing: 1.15
 headings:
   1:
-    font: Calibri
+    font: null
     size_pt: 20
     color: 365F91
     bold: true
     italic: false
     space_before_pt: 18
     space_after_pt: 4
+    rule:
+      width_pt: 1.0
+      color: 365F91
+      space_pt: 2
   2:
-    font: Calibri
+    font: null
     size_pt: 16
     color: 4F81BD
     bold: true
     italic: false
     space_before_pt: 12
     space_after_pt: 4
+    rule:
+      width_pt: 0.75
+      color: 4F81BD
+      space_pt: 2
   3:
-    font: Calibri
+    font: null
     size_pt: 13
     color: 4F81BD
     bold: true
     italic: false
     space_before_pt: 10
     space_after_pt: 2
+    rule: null
   4:
-    font: Calibri
+    font: null
     size_pt: 12
     color: 4F81BD
     bold: true
     italic: false
     space_before_pt: 10
     space_after_pt: 2
+    rule: null
   5:
-    font: Calibri
+    font: null
     size_pt: 11
     color: 243F60
     bold: true
     italic: false
     space_before_pt: 8
     space_after_pt: 2
+    rule: null
   6:
-    font: Calibri
+    font: null
     size_pt: 11
     color: 243F60
     bold: false
     italic: true
     space_before_pt: 8
     space_after_pt: 2
+    rule: null
 inline_code:
   font: Consolas
   size_pt: 10
@@ -73,12 +87,13 @@ code_block:
   padding_pt: 6
   space_before_pt: 8
   space_after_pt: 8
+  indent_in: 0.25
   caption:
     size_pt: 8
     color: '808080'
     italic: true
 blockquote:
-  bar_color: '999999'
+  bar_color: 365F91
   bar_width_pt: 2.25
   bar_gap_pt: 12
   indent_in: 0.25
@@ -86,11 +101,14 @@ blockquote:
 lists:
   bullet:
     glyphs:
-    - •
-    - ◦
+    - ∩é╖
+    - ∩é╖
+    glyph_fonts:
+    - Symbol
+    - Symbol
     indent_in:
-    - 0.25
     - 0.5
+    - 0.75
     space_after_pt: 2
   ordered:
     indent_in: 0.5
@@ -99,24 +117,27 @@ lists:
 table:
   border:
     style: single
-    width_pt: 0.5
-    color: BFBFBF
+    width_pt: 0.75
+    color: '808080'
+    edges:
+    - insideH
   header:
     bold: true
-    fill: F2F2F2
+    fill: null
+    underline_width_pt: 1.0
+    underline_color: '404040'
   cell_margins_pt:
-    top: 3.6
-    bottom: 3.6
-    left: 5.4
-    right: 5.4
+    top: 4
+    bottom: 4
+    left: 5
+    right: 10
   width: full
-note:
-  indent_in: 0.3
-  italic: true
-  size_pt: 10
+  indent_in: 0.25
 hr:
   space_after_pt: 6
-  rule: false
+  rule: true
+  width_pt: 0.75
+  color: BFBFBF
 links:
   color: 0563C1
   underline: true
