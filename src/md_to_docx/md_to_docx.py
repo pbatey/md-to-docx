@@ -13,22 +13,23 @@ Uses python-docx for fine-grained control over formatting,
 especially preserving line breaks within email body blockquotes.
 """
 
+import argparse
 import io
 import os
-import sys
 import re
+import sys
 import urllib.request
-from pathlib import Path
-from docx import Document
-from docx.shared import Pt, Inches, RGBColor, Emu
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.style import WD_STYLE_TYPE
-from docx.oxml.ns import qn, nsmap
-from docx.oxml import OxmlElement
-from lxml import etree
 from copy import deepcopy
-import yaml
+from datetime import datetime, timezone
+from pathlib import Path
 
+import yaml
+from docx import Document
+from docx.enum.style import WD_STYLE_TYPE
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.shared import Inches, Pt, RGBColor
 
 # --------------------------------------------------------------------------- #
 # Styling configuration
@@ -463,9 +464,8 @@ def parse_markdown(text: str) -> list:
             continue
 
         # Bold metadata lines (From:, To:, Subject:, etc.) — group consecutive ones
-        elif line.startswith("**From:**") or line.startswith("**To:**") or \
-             line.startswith("**Subject:**") or line.startswith("**CC:**") or \
-             line.startswith("**Body:**") or line.startswith("**Body"):
+        elif line.startswith(("**From:**", "**To:**", "**Subject:**",
+                              "**CC:**", "**Body:**", "**Body")):
             meta_lines = []
             while i < len(lines) and (lines[i].startswith("**From:") or lines[i].startswith("**To:") or \
                   lines[i].startswith("**Subject:") or lines[i].startswith("**CC:") or \
@@ -609,8 +609,7 @@ def _resolve_internal_anchor(target: str, anchors: dict):
     if not anchors:
         return None
     key = target.strip()
-    if key.startswith("#"):
-        key = key[1:]
+    key = key.removeprefix("#")
     # Try GitHub-style slug match first, then raw lowercased text match
     slug = key.lower()
     if slug in anchors:
@@ -1285,7 +1284,7 @@ def _add_image(paragraph, src: str, alt: str, base_dir=None, allow_remote=False)
     content area are scaled down to fit while preserving aspect ratio.
     """
     def _fallback():
-        paragraph.add_run(alt if alt else "[image]")
+        paragraph.add_run(alt or "[image]")
 
     def _embed(image_source):
         run = paragraph.add_run()
@@ -1370,7 +1369,7 @@ def add_formatted_text(paragraph, text: str, anchors: dict = None, base_dir=None
     # Internal Obsidian heading links: [[#Heading]] or [[#Heading|alias]]
     def _obsidian_heading_link(m):
         target = m.group(1)
-        alias = m.group(2) if m.group(2) else target
+        alias = m.group(2) or target
         # Placeholder token; resolved during segment rendering below
         return f"\x00LINK\x00{target}\x00{alias}\x00"
 
@@ -2050,15 +2049,17 @@ def _add_heading(doc, text: str, level: int, sc: "StyleConfig"):
     return p
 
 
-def build_docx(blocks: list, output_path: str, title: str, author: str, date: str,
+def build_docx(blocks: list, output_path: str, title=None, author=None, date=None,
                base_dir=None, allow_remote_images=False, style=None):
     """Build the DOCX from parsed blocks, applying named styles from ``style``.
 
-    ``base_dir`` resolves relative image paths; it defaults to the current
-    working directory when not supplied. ``allow_remote_images`` enables
-    fetching ``http(s)`` image sources (off by default). ``style`` is a merged
-    style dict (see :func:`load_style`); when ``None`` the built-in defaults are
-    used.
+    ``title``, ``author``, and ``date`` are optional document metadata written to
+    the file's core properties (Word's Title/Author fields); each is omitted when
+    left as ``None``. ``base_dir`` resolves relative image paths; it defaults to
+    the current working directory when not supplied. ``allow_remote_images``
+    enables fetching ``http(s)`` image sources (off by default). ``style`` is a
+    merged style dict (see :func:`load_style`); when ``None`` the built-in
+    defaults are used.
     """
     if base_dir is None:
         base_dir = Path.cwd()
@@ -2266,6 +2267,27 @@ def build_docx(blocks: list, output_path: str, title: str, author: str, date: st
                         add_formatted_text(sp, sub, anchors, base_dir=base_dir,
                                    allow_remote_images=allow_remote_images)
 
+    # Write optional document metadata to the file's core properties.
+    cp = doc.core_properties
+    if title is not None:
+        cp.title = title
+    if author is not None:
+        cp.author = author
+    if date is not None:
+        # core_properties.created requires a datetime; accept one directly, or
+        # parse an ISO-8601 date/datetime string. Anything else is ignored so a
+        # freeform label never breaks the save.
+        created = None
+        if isinstance(date, datetime):
+            created = date
+        elif isinstance(date, str):
+            try:
+                created = datetime.fromisoformat(date)
+            except ValueError:
+                created = None
+        if created is not None:
+            cp.created = created
+
     doc.save(output_path)
     print(f"Saved: {output_path}")
 
@@ -2303,39 +2325,82 @@ def check_output_writable(output_path: str):
             sys.exit(1)
 
 
+def _resolve_version() -> str:
+    """Best-effort package version for --version.
+
+    Works when installed (reads distribution metadata) and degrades gracefully
+    when run as a standalone PEP 723 script where no distribution is present.
+    """
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("md-to-docx")
+    except PackageNotFoundError:
+        return "0+unknown"
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="md-to-docx",
+        description="Convert a Markdown file to a styled Word .docx document.",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {_resolve_version()}",
+    )
+    parser.add_argument(
+        "--fetch-remote-images",
+        "--fetch-remote",
+        dest="allow_remote_images",
+        action="store_true",
+        help="Download and embed remote http(s) images (off by default).",
+    )
+    parser.add_argument(
+        "--style",
+        dest="style_path",
+        metavar="config.yaml",
+        default=os.environ.get("MD_TO_DOCX_STYLE"),
+        help="Path to a YAML style config (overrides MD_TO_DOCX_STYLE).",
+    )
+    parser.add_argument(
+        "--dump-config",
+        action="store_true",
+        help="Print the default style config as YAML to stdout and exit.",
+    )
+    # Positional args are optional so --dump-config can run without them.
+    parser.add_argument(
+        "input",
+        nargs="?",
+        metavar="input.md",
+        help="Path to the Markdown input file.",
+    )
+    parser.add_argument(
+        "output",
+        nargs="?",
+        metavar="output.docx",
+        help="Path to write the .docx output.",
+    )
+    return parser
+
+
 def main():
-    # Separate flags from positional args so ordering is flexible.
-    allow_remote_images = False
-    style_path = os.environ.get("MD_TO_DOCX_STYLE")
-    positional = []
-    args = sys.argv[1:]
-    i = 0
-    while i < len(args):
-        arg = args[i]
-        if arg in ("--fetch-remote-images", "--fetch-remote"):
-            allow_remote_images = True
-        elif arg == "--dump-config":
-            print(dump_default_style(), end="")
-            sys.exit(0)
-        elif arg == "--style":
-            if i + 1 >= len(args):
-                print("ERROR: --style requires a path argument")
-                sys.exit(1)
-            style_path = args[i + 1]
-            i += 1
-        elif arg.startswith("--style="):
-            style_path = arg.split("=", 1)[1]
-        else:
-            positional.append(arg)
-        i += 1
+    parser = build_parser()
+    args = parser.parse_args()
 
-    if len(positional) < 2:
-        print("Usage: uv run md_to_docx.py [--fetch-remote-images] "
-              "[--style config.yaml] [--dump-config] <input.md> <output.docx>")
-        sys.exit(1)
+    if args.dump_config:
+        # Write UTF-8 bytes directly so non-UTF-8 consoles (e.g. Windows cp1252)
+        # don't choke on characters like the bullet glyph in the default style.
+        sys.stdout.buffer.write(dump_default_style().encode("utf-8"))
+        sys.exit(0)
 
-    input_path = positional[0]
-    output_path = positional[1]
+    if not args.input or not args.output:
+        parser.error("the following arguments are required: input.md, output.docx")
+
+    input_path = args.input
+    output_path = args.output
+    allow_remote_images = args.allow_remote_images
+    style_path = args.style_path
 
     if not Path(input_path).exists():
         print(f"ERROR: {input_path} not found")
@@ -2353,12 +2418,21 @@ def main():
     text = Path(input_path).read_text(encoding="utf-8")
     blocks = parse_markdown(text)
 
+    # Derive document metadata from the content/environment rather than
+    # hard-coding it: title from the first level-1 heading (else the filename),
+    # author from the OS user, date as now.
+    doc_title = next(
+        (b["text"] for b in blocks if b.get("type") == "h1" and b.get("text")),
+        Path(input_path).stem,
+    )
+    doc_author = os.environ.get("USER") or os.environ.get("USERNAME")
+
     build_docx(
         blocks,
         output_path,
-        title="Onboarding Journey — Email Detail",
-        author="Phil Batey",
-        date="July 2, 2026",
+        title=doc_title,
+        author=doc_author,
+        date=datetime.now(timezone.utc),
         # Resolve relative image paths against the markdown file's directory.
         base_dir=Path(input_path).resolve().parent,
         allow_remote_images=allow_remote_images,

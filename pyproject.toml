@@ -51,3 +51,33 @@ include = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint]
+# A focused, high-value rule set rather than ruff's full defaults.
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes (unused imports/names, etc.)
+    "I",    # isort (import ordering)
+    "UP",   # pyupgrade (modern syntax)
+    "B",    # flake8-bugbear (likely bugs)
+    "C4",   # flake8-comprehensions
+    "PIE",  # flake8-pie (misc lints)
+    "FURB", # refurb (modernizations)
+]
+ignore = [
+    # Line length has never been enforced in this project; many descriptive
+    # lines and OOXML literals run long by design. Not worth mass-reflowing.
+    "E501",
+    # This converter is deliberately fail-soft: rendering a document should
+    # never crash on one malformed element, so broad try/except that swallow
+    # or continue are intentional throughout.
+    "BLE001", # blind `except Exception`
+    "S110",   # try-except-pass
+    "S112",   # try-except-continue
+    # The code favours explicit int(round(...)) casts for OOXML sizing; the
+    # "already an integer" hint fights that intentional clarity.
+    "RUF046",
+    # The module is untyped by design; implicit Optional from `x=None` params
+    # is fine here and adding annotations is out of scope.
+    "RUF013",
+]

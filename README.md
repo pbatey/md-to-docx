@@ -36,17 +36,47 @@ pipe-less tables.
 
 ## Install
 
+Install it as a global command with [uv](https://docs.astral.sh/uv/) (installs
+into an isolated environment and puts `md-to-docx` on your `PATH`):
+
 ```sh
 uv tool install .
-# or
+# from anywhere, straight from GitHub:
+uv tool install git+https://github.com/pbatey/md-to-docx.git
+# or with pip:
 pip install .
 ```
+
+If the command isn't found in a new shell, run `uv tool update-shell` once and
+restart your terminal. To pick up local code changes after editing, reinstall
+with `uv tool install --from . md-to-docx --reinstall`.
 
 This exposes an `md-to-docx` command:
 
 ```sh
 md-to-docx input.md output.docx
 ```
+
+### Usage
+
+```
+md-to-docx [-h] [--version] [--fetch-remote-images]
+           [--style config.yaml] [--dump-config]
+           input.md output.docx
+```
+
+`input.md` and `output.docx` are required for a conversion; `--dump-config` is
+the one mode that runs without them.
+
+| Option | Description |
+| --- | --- |
+| `-h`, `--help` | Show usage and exit. |
+| `--version` | Print the version and exit. |
+| `--fetch-remote-images` | Download and embed remote `http(s)` images (off by default). |
+| `--style config.yaml` | Path to a YAML style config (overrides `MD_TO_DOCX_STYLE`). |
+| `--dump-config` | Print the default style config as YAML to stdout and exit. |
+
+Run `md-to-docx --help` to see this list at any time.
 
 ### Remote images
 
@@ -148,8 +178,9 @@ uv run md_to_docx.py input.md output.docx
 uv run md_to_docx.py --style style.yaml input.md output.docx
 ```
 
-No template or other files are needed — the default styling is baked into the
-script.
+The same options apply as the installed command (`--help`, `--version`,
+`--fetch-remote-images`, `--style`, `--dump-config`). No template or other files
+are needed — the default styling is baked into the script.
 
 ## Development
 

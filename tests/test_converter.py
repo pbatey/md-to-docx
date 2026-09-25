@@ -222,8 +222,7 @@ def _render_para(md, tmp_path, base_dir=None):
 
 def _all_runs(doc):
     for p in doc.paragraphs:
-        for r in p.runs:
-            yield r
+        yield from p.runs
 
 
 def _write_tiny_png(path, w=2, h=2):
@@ -402,6 +401,7 @@ def _render_para_remote(md, tmp_path, allow_remote_images):
 
 def test_remote_image_embedded_when_allowed(tmp_path, monkeypatch):
     import io
+
     import md_to_docx.md_to_docx as mod
 
     # Serve a valid PNG from a fake fetcher — no real network.
@@ -516,8 +516,8 @@ def test_internal_link_uses_char_style(tmp_path):
 
 
 def test_link_color_on_hyperlink_style(tmp_path):
-    from docx.oxml.ns import qn
-    from md_to_docx import build_docx as _b, load_style
+    from md_to_docx import build_docx as _b
+    from md_to_docx import load_style
     cfg_file = tmp_path / "s.yaml"
     cfg_file.write_text("links:\n  color: FF0000\n", encoding="utf-8")
     blocks = parse_markdown("visit https://example.com")
@@ -585,6 +585,7 @@ def test_load_style_unknown_keys_ignored(tmp_path):
 
 def test_dump_config_roundtrips_to_defaults():
     import yaml as _yaml
+
     from md_to_docx import DEFAULT_STYLE, dump_default_style
     text = dump_default_style()
     parsed = _yaml.safe_load(text)
@@ -627,7 +628,8 @@ def test_heading_style_and_outline(tmp_path):
 
 
 def test_heading_color_override(tmp_path):
-    from md_to_docx import build_docx as _b, load_style
+    from md_to_docx import build_docx as _b
+    from md_to_docx import load_style
     cfg = tmp_path / "s.yaml"
     cfg.write_text("headings:\n  1:\n    color: FF0000\n", encoding="utf-8")
     blocks = parse_markdown("# Title")
@@ -657,7 +659,9 @@ def test_body_font_inherited_from_doc_defaults(tmp_path):
 
 def test_page_margins_applied(tmp_path):
     from docx.shared import Inches
-    from md_to_docx import build_docx as _b, load_style
+
+    from md_to_docx import build_docx as _b
+    from md_to_docx import load_style
     cfg = tmp_path / "s.yaml"
     cfg.write_text("page:\n  margins_in:\n    left: 2.0\n", encoding="utf-8")
     blocks = parse_markdown("# t")
@@ -672,7 +676,8 @@ def test_page_margins_applied(tmp_path):
 # Config-driven code block, blockquote, inline code
 # --------------------------------------------------------------------------- #
 def _render_with_style(md, tmp_path, yaml_text):
-    from md_to_docx import build_docx as _b, load_style
+    from md_to_docx import build_docx as _b
+    from md_to_docx import load_style
     cfg = tmp_path / "s.yaml"
     cfg.write_text(yaml_text, encoding="utf-8")
     blocks = parse_markdown(md)
@@ -830,8 +835,9 @@ def test_table_unspecified_alignment_is_default(tmp_path):
 
 
 def test_parse_table_alignments_helper():
-    from md_to_docx.md_to_docx import _parse_table_alignments
     from docx.enum.text import WD_ALIGN_PARAGRAPH as A
+
+    from md_to_docx.md_to_docx import _parse_table_alignments
     aligns = _parse_table_alignments("|:---|:--:|---:|---|")
     assert aligns == [A.LEFT, A.CENTER, A.RIGHT, None]
 
@@ -987,6 +993,7 @@ def test_table_indent_override_to_zero(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_dump_config_cli(tmp_path, monkeypatch, capsys):
     import yaml as _yaml
+
     from md_to_docx import DEFAULT_STYLE, main
     monkeypatch.setattr("sys.argv", ["md-to-docx", "--dump-config"])
     with pytest.raises(SystemExit) as exc:
