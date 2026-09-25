@@ -10,7 +10,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write   # update the GitHub Release body with the changelog notes
     steps:
       - uses: actions/checkout@v4
 
@@ -29,6 +29,28 @@ jobs:
             echo "::error::Release tag ($TAG) does not match pyproject.toml version ($PROJECT_VERSION)."
             exit 1
           fi
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Print the body under "## [<version>]" up to (not including) the next
+          # "## " heading, trimming leading/trailing blank lines.
+          awk -v ver="$VERSION" '
+            $0 ~ "^## \\[" ver "\\]" { capture = 1; next }
+            capture && /^## / { exit }
+            capture { print }
+          ' CHANGELOG.md | sed -e '/./,$!d' | tac | sed -e '/./,$!d' | tac > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::No CHANGELOG.md section found for version $VERSION (expected a '## [$VERSION]' heading with content)."
+            exit 1
+          fi
+          echo "----- release notes -----"
+          cat release-notes.md
+
+      - name: Update the GitHub Release body with the changelog notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release edit "${GITHUB_REF_NAME}" --notes-file release-notes.md --repo "${GITHUB_REPOSITORY}"
 
       - name: Build sdist and wheel
         run: uv build --no-sources
