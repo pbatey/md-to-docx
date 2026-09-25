@@ -122,6 +122,7 @@ def _hr_bottom_border(doc):
     """Return the bottom border of the first HR paragraph (empty Normal para
     with a pBdr), or None."""
     from docx.oxml.ns import qn
+
     for p in doc.paragraphs:
         pPr = p._p.find(qn("w:pPr"))
         if pPr is None or p.text.strip() or p.style.name != "Normal":
@@ -134,6 +135,7 @@ def _hr_bottom_border(doc):
 
 def test_hr_draws_line_by_default(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("text\n\n---\n\nmore", tmp_path)
     b = _hr_bottom_border(doc)
     assert b is not None and b.get(qn("w:val")) == "single"
@@ -147,8 +149,10 @@ def test_hr_rule_disabled(tmp_path):
 
 def test_hr_rule_color_and_width_override(tmp_path):
     from docx.oxml.ns import qn
-    doc = _render_with_style("a\n\n---\n\nb", tmp_path,
-                             "hr:\n  color: FF0000\n  width_pt: 2\n")
+
+    doc = _render_with_style(
+        "a\n\n---\n\nb", tmp_path, "hr:\n  color: FF0000\n  width_pt: 2\n"
+    )
     b = _hr_bottom_border(doc)
     assert b is not None
     assert b.get(qn("w:color")) == "FF0000"
@@ -232,15 +236,21 @@ def _write_tiny_png(path, w=2, h=2):
 
     def _chunk(typ, data):
         body = typ + data
-        return struct.pack(">I", len(data)) + body + struct.pack(
-            ">I", zlib.crc32(body) & 0xFFFFFFFF)
+        return (
+            struct.pack(">I", len(data))
+            + body
+            + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
+        )
 
     sig = b"\x89PNG\r\n\x1a\n"
     ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)  # 8-bit RGB
     raw = b"".join(b"\x00" + b"\xff\x00\x00" * w for _ in range(h))
-    png = (sig + _chunk(b"IHDR", ihdr)
-           + _chunk(b"IDAT", zlib.compress(raw))
-           + _chunk(b"IEND", b""))
+    png = (
+        sig
+        + _chunk(b"IHDR", ihdr)
+        + _chunk(b"IDAT", zlib.compress(raw))
+        + _chunk(b"IEND", b"")
+    )
     Path(path).write_bytes(png)
 
 
@@ -324,6 +334,7 @@ def test_code_fence_no_language():
 
 def test_code_block_has_padded_shaded_box(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("```\ncode line\n```", tmp_path)
     # The shaded padded box now lives on the Code Block STYLE, not the paragraph.
     pPr = doc.styles["Code Block"].element.find(qn("w:pPr"))
@@ -383,7 +394,9 @@ def test_image_missing_falls_back_to_alt(tmp_path):
 
 
 def test_image_remote_falls_back_to_alt(tmp_path):
-    doc = _render_para("![remote](https://example.com/x.png)", tmp_path, base_dir=tmp_path)
+    doc = _render_para(
+        "![remote](https://example.com/x.png)", tmp_path, base_dir=tmp_path
+    )
     text = "".join(r.text for r in _all_runs(doc))
     assert "remote" in text
     assert len(doc.inline_shapes) == 0
@@ -392,10 +405,18 @@ def test_image_remote_falls_back_to_alt(tmp_path):
 def _render_para_remote(md, tmp_path, allow_remote_images):
     """Like _render_para but toggles remote image fetching."""
     from md_to_docx import build_docx as _build
+
     blocks = parse_markdown(md)
     out = tmp_path / "r.docx"
-    _build(blocks, str(out), title="T", author="A", date="d",
-           base_dir=tmp_path, allow_remote_images=allow_remote_images)
+    _build(
+        blocks,
+        str(out),
+        title="T",
+        author="A",
+        date="d",
+        base_dir=tmp_path,
+        allow_remote_images=allow_remote_images,
+    )
     return Document(str(out))
 
 
@@ -408,11 +429,11 @@ def test_remote_image_embedded_when_allowed(tmp_path, monkeypatch):
     png = tmp_path / "buf.png"
     _write_tiny_png(png)
     payload = png.read_bytes()
-    monkeypatch.setattr(mod, "_fetch_remote_image",
-                        lambda url: io.BytesIO(payload))
+    monkeypatch.setattr(mod, "_fetch_remote_image", lambda url: io.BytesIO(payload))
 
-    doc = _render_para_remote("![pic](https://example.com/a.png)", tmp_path,
-                              allow_remote_images=True)
+    doc = _render_para_remote(
+        "![pic](https://example.com/a.png)", tmp_path, allow_remote_images=True
+    )
     assert len(doc.inline_shapes) == 1
 
 
@@ -427,8 +448,9 @@ def test_remote_image_not_fetched_when_disabled(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod, "_fetch_remote_image", _spy)
 
-    doc = _render_para_remote("![pic alt](https://example.com/a.png)", tmp_path,
-                              allow_remote_images=False)
+    doc = _render_para_remote(
+        "![pic alt](https://example.com/a.png)", tmp_path, allow_remote_images=False
+    )
     assert called["n"] == 0
     assert len(doc.inline_shapes) == 0
     assert "pic alt" in "".join(r.text for r in _all_runs(doc))
@@ -442,8 +464,9 @@ def test_remote_image_fetch_failure_falls_back(tmp_path, monkeypatch):
 
     monkeypatch.setattr(mod, "_fetch_remote_image", _boom)
 
-    doc = _render_para_remote("![pic alt](https://example.com/a.png)", tmp_path,
-                              allow_remote_images=True)
+    doc = _render_para_remote(
+        "![pic alt](https://example.com/a.png)", tmp_path, allow_remote_images=True
+    )
     assert len(doc.inline_shapes) == 0
     assert "pic alt" in "".join(r.text for r in _all_runs(doc))
 
@@ -486,6 +509,7 @@ def test_trailing_punctuation_trimmed_from_url(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_hyperlink_uses_char_style(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("see https://example.com now", tmp_path)
     found = False
     for h in doc.element.body.iter(qn("w:hyperlink")):
@@ -500,6 +524,7 @@ def test_hyperlink_uses_char_style(tmp_path):
 
 def test_internal_link_uses_char_style(tmp_path):
     from docx.oxml.ns import qn
+
     md = "# Overview\n\nJump to [Details](#details).\n\n## Details\n\nHere."
     doc = _render_para(md, tmp_path)
     # An internal-anchor hyperlink exists and its run uses the Hyperlink style.
@@ -518,12 +543,19 @@ def test_internal_link_uses_char_style(tmp_path):
 def test_link_color_on_hyperlink_style(tmp_path):
     from md_to_docx import build_docx as _b
     from md_to_docx import load_style
+
     cfg_file = tmp_path / "s.yaml"
     cfg_file.write_text("links:\n  color: FF0000\n", encoding="utf-8")
     blocks = parse_markdown("visit https://example.com")
     out = tmp_path / "o.docx"
-    _b(blocks, str(out), title="T", author="A", date="d",
-       style=load_style(str(cfg_file)))
+    _b(
+        blocks,
+        str(out),
+        title="T",
+        author="A",
+        date="d",
+        style=load_style(str(cfg_file)),
+    )
     doc = Document(str(out))
     # The Hyperlink character style should carry the overridden color.
     hl_style = doc.styles["Hyperlink"]
@@ -535,6 +567,7 @@ def test_link_color_on_hyperlink_style(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_load_style_defaults_when_no_path():
     from md_to_docx import DEFAULT_STYLE, load_style
+
     cfg = load_style()
     assert cfg == DEFAULT_STYLE
     # It's a copy, not the same object (so callers can't mutate defaults).
@@ -543,10 +576,11 @@ def test_load_style_defaults_when_no_path():
 
 def test_load_style_deep_merge(tmp_path):
     from md_to_docx import load_style
+
     yaml_file = tmp_path / "style.yaml"
     yaml_file.write_text(
-        "body:\n  size_pt: 13\nheadings:\n  1:\n    color: FF0000\n",
-        encoding="utf-8")
+        "body:\n  size_pt: 13\nheadings:\n  1:\n    color: FF0000\n", encoding="utf-8"
+    )
     cfg = load_style(str(yaml_file))
     # Overridden values applied.
     assert cfg["body"]["size_pt"] == 13
@@ -561,6 +595,7 @@ def test_load_style_deep_merge(tmp_path):
 
 def test_load_style_invalid_yaml_raises(tmp_path):
     from md_to_docx import StyleError, load_style
+
     bad = tmp_path / "bad.yaml"
     bad.write_text("body: : : not valid\n", encoding="utf-8")
     with pytest.raises(StyleError):
@@ -569,15 +604,18 @@ def test_load_style_invalid_yaml_raises(tmp_path):
 
 def test_load_style_missing_file_raises():
     from md_to_docx import StyleError, load_style
+
     with pytest.raises(StyleError):
         load_style("does-not-exist.yaml")
 
 
 def test_load_style_unknown_keys_ignored(tmp_path):
     from md_to_docx import load_style
+
     yaml_file = tmp_path / "style.yaml"
-    yaml_file.write_text("totally_unknown_key: 42\nbody:\n  size_pt: 12\n",
-                         encoding="utf-8")
+    yaml_file.write_text(
+        "totally_unknown_key: 42\nbody:\n  size_pt: 12\n", encoding="utf-8"
+    )
     cfg = load_style(str(yaml_file))
     # Unknown key is merged in but harmless; known override still works.
     assert cfg["body"]["size_pt"] == 12
@@ -587,6 +625,7 @@ def test_dump_config_roundtrips_to_defaults():
     import yaml as _yaml
 
     from md_to_docx import DEFAULT_STYLE, dump_default_style
+
     text = dump_default_style()
     parsed = _yaml.safe_load(text)
     # Heading keys come back as ints via normalization path; compare loosely.
@@ -596,6 +635,7 @@ def test_dump_config_roundtrips_to_defaults():
 
 def test_styleconfig_coercion(tmp_path):
     from md_to_docx import StyleConfig, load_style
+
     sc = StyleConfig(load_style())
     # number + color coercion
     assert sc.num("body", "size_pt") == 11.0
@@ -613,6 +653,7 @@ def test_styleconfig_coercion(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_heading_style_and_outline(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("# Big Title", tmp_path)
     p = next(p for p in doc.paragraphs if "Big Title" in p.text)
     # Paragraph uses the named "Heading 1" style.
@@ -630,12 +671,12 @@ def test_heading_style_and_outline(tmp_path):
 def test_heading_color_override(tmp_path):
     from md_to_docx import build_docx as _b
     from md_to_docx import load_style
+
     cfg = tmp_path / "s.yaml"
     cfg.write_text("headings:\n  1:\n    color: FF0000\n", encoding="utf-8")
     blocks = parse_markdown("# Title")
     out = tmp_path / "o.docx"
-    _b(blocks, str(out), title="T", author="A", date="d",
-       style=load_style(str(cfg)))
+    _b(blocks, str(out), title="T", author="A", date="d", style=load_style(str(cfg)))
     doc = Document(str(out))
     # Color lives on the Heading 1 style, not the run.
     style = doc.styles["Heading 1"]
@@ -645,6 +686,7 @@ def test_heading_color_override(tmp_path):
 def test_body_font_inherited_from_doc_defaults(tmp_path):
     """Body text has no direct font — it inherits from docDefaults (Aptos)."""
     from docx.oxml.ns import qn
+
     doc = _render_para("plain paragraph text", tmp_path)
     p = next(p for p in doc.paragraphs if "plain paragraph" in p.text)
     # The run has no direct font (inherits from Normal → docDefaults).
@@ -652,7 +694,14 @@ def test_body_font_inherited_from_doc_defaults(tmp_path):
     # The docDefaults rFonts has Aptos.
     styles_el = doc.styles.element
     rFonts = styles_el.find(
-        qn("w:docDefaults") + "/" + qn("w:rPrDefault") + "/" + qn("w:rPr") + "/" + qn("w:rFonts"))
+        qn("w:docDefaults")
+        + "/"
+        + qn("w:rPrDefault")
+        + "/"
+        + qn("w:rPr")
+        + "/"
+        + qn("w:rFonts")
+    )
     assert rFonts is not None
     assert rFonts.get(qn("w:ascii")) == "Aptos"
 
@@ -662,12 +711,12 @@ def test_page_margins_applied(tmp_path):
 
     from md_to_docx import build_docx as _b
     from md_to_docx import load_style
+
     cfg = tmp_path / "s.yaml"
     cfg.write_text("page:\n  margins_in:\n    left: 2.0\n", encoding="utf-8")
     blocks = parse_markdown("# t")
     out = tmp_path / "o.docx"
-    _b(blocks, str(out), title="T", author="A", date="d",
-       style=load_style(str(cfg)))
+    _b(blocks, str(out), title="T", author="A", date="d", style=load_style(str(cfg)))
     doc = Document(str(out))
     assert doc.sections[0].left_margin == Inches(2.0)
 
@@ -678,19 +727,27 @@ def test_page_margins_applied(tmp_path):
 def _render_with_style(md, tmp_path, yaml_text):
     from md_to_docx import build_docx as _b
     from md_to_docx import load_style
+
     cfg = tmp_path / "s.yaml"
     cfg.write_text(yaml_text, encoding="utf-8")
     blocks = parse_markdown(md)
     out = tmp_path / "o.docx"
-    _b(blocks, str(out), title="T", author="A", date="d",
-       base_dir=tmp_path, style=load_style(str(cfg)))
+    _b(
+        blocks,
+        str(out),
+        title="T",
+        author="A",
+        date="d",
+        base_dir=tmp_path,
+        style=load_style(str(cfg)),
+    )
     return Document(str(out))
 
 
 def test_code_block_fill_override(tmp_path):
     from docx.oxml.ns import qn
-    doc = _render_with_style("```\nx=1\n```", tmp_path,
-                             "code_block:\n  fill: ABCDEF\n")
+
+    doc = _render_with_style("```\nx=1\n```", tmp_path, "code_block:\n  fill: ABCDEF\n")
     # The fill lives on the Code Block style (shd + border color).
     pPr = doc.styles["Code Block"].element.find(qn("w:pPr"))
     shd = pPr.find(qn("w:shd"))
@@ -701,13 +758,12 @@ def test_code_block_fill_override(tmp_path):
 
 def test_blockquote_bar_color_override(tmp_path):
     from docx.oxml.ns import qn
-    doc = _render_with_style("> quoted", tmp_path,
-                             "blockquote:\n  bar_color: 112233\n")
+
+    doc = _render_with_style("> quoted", tmp_path, "blockquote:\n  bar_color: 112233\n")
     # The left bar now lives on the Blockquote style's pPr (editable in Word),
     # not stamped on each paragraph.
     style = doc.styles["Blockquote"]
-    left = style.element.find(
-        qn("w:pPr") + "/" + qn("w:pBdr") + "/" + qn("w:left"))
+    left = style.element.find(qn("w:pPr") + "/" + qn("w:pBdr") + "/" + qn("w:left"))
     assert left is not None and left.get(qn("w:color")) == "112233"
     # And the paragraph itself carries no direct border.
     q = next(p for p in doc.paragraphs if "quoted" in p.text)
@@ -716,8 +772,9 @@ def test_blockquote_bar_color_override(tmp_path):
 
 
 def test_inline_code_font_override(tmp_path):
-    doc = _render_with_style("use `foo` here", tmp_path,
-                             "inline_code:\n  font: Courier New\n")
+    doc = _render_with_style(
+        "use `foo` here", tmp_path, "inline_code:\n  font: Courier New\n"
+    )
     # The inline-code character style should carry the overridden font.
     style = doc.styles["Inline Code"]
     assert style.font.name == "Courier New"
@@ -731,6 +788,7 @@ def test_inline_code_font_override(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_bullet_list_has_numbering(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("- one\n- two", tmp_path)
     numprs = list(doc.element.body.iter(qn("w:numPr")))
     assert len(numprs) == 2
@@ -738,6 +796,7 @@ def test_bullet_list_has_numbering(tmp_path):
 
 def test_two_ordered_lists_each_restart(tmp_path):
     from docx.oxml.ns import qn
+
     md = "1. a\n2. b\n\ntext\n\n1. c\n2. d"
     doc = _render_para(md, tmp_path)
     # Two separate numId values (one per block) so each restarts at 1.
@@ -749,13 +808,13 @@ def test_two_ordered_lists_each_restart(tmp_path):
     assert len(num_ids) >= 2
     # Each created num has a startOverride of 1.
     numbering = doc.part.numbering_part._element
-    overrides = [o.get(qn("w:val"))
-                 for o in numbering.iter(qn("w:startOverride"))]
+    overrides = [o.get(qn("w:val")) for o in numbering.iter(qn("w:startOverride"))]
     assert overrides and all(v == "1" for v in overrides)
 
 
 def test_numbered_list_subitems_nest(tmp_path):
     from docx.oxml.ns import qn
+
     md = "1. first\n   - sub a\n   - sub b\n2. second"
     doc = _render_para(md, tmp_path)
     # Sub-bullets render at ilvl 1.
@@ -774,10 +833,13 @@ def test_task_glyphs_preserved(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_table_direct_borders_and_header(tmp_path):
     from docx.oxml.ns import qn
+
     md = "| A | B |\n|---|---|\n| 1 | 2 |"
     doc = _render_with_style(
-        md, tmp_path,
-        "table:\n  border:\n    color: 123456\n  header:\n    bold: true\n    fill: EEEEEE\n")
+        md,
+        tmp_path,
+        "table:\n  border:\n    color: 123456\n  header:\n    bold: true\n    fill: EEEEEE\n",
+    )
     t = doc.tables[0]
     tblBorders = t._tbl.find(qn("w:tblPr") + "/" + qn("w:tblBorders"))
     assert tblBorders is not None
@@ -793,6 +855,7 @@ def test_table_direct_borders_and_header(tmp_path):
 
 def test_table_horizontal_rules_only_by_default(tmp_path):
     from docx.oxml.ns import qn
+
     md = "| A | B |\n|---|---|\n| 1 | 2 |"
     doc = _render_para(md, tmp_path)
     t = doc.tables[0]
@@ -814,9 +877,8 @@ def test_table_horizontal_rules_only_by_default(tmp_path):
 
 def test_table_column_alignment(tmp_path):
     from docx.enum.text import WD_ALIGN_PARAGRAPH as A
-    md = ("| L | C | R |\n"
-          "|:--|:-:|--:|\n"
-          "| a | b | c |\n")
+
+    md = "| L | C | R |\n|:--|:-:|--:|\n| a | b | c |\n"
     doc = _render_para(md, tmp_path)
     t = doc.tables[0]
     # Header and body share the column alignment.
@@ -838,6 +900,7 @@ def test_parse_table_alignments_helper():
     from docx.enum.text import WD_ALIGN_PARAGRAPH as A
 
     from md_to_docx.md_to_docx import _parse_table_alignments
+
     aligns = _parse_table_alignments("|:---|:--:|---:|---|")
     assert aligns == [A.LEFT, A.CENTER, A.RIGHT, None]
 
@@ -857,6 +920,7 @@ def test_table_br_becomes_line_break_in_cell(tmp_path):
 
 def test_split_table_row_helper():
     from md_to_docx.md_to_docx import _split_table_row
+
     assert _split_table_row("| a \\| b | c |") == ["a | b", "c"]
     assert _split_table_row("| x<br>y |") == ["x\ny"]
 
@@ -876,20 +940,22 @@ def test_extra_dashes_line_parses(tmp_path):
 
 def test_table_no_top_bottom_edges_by_default(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("| A | B |\n|---|---|\n| 1 | 2 |", tmp_path)
-    tblBorders = doc.tables[0]._tbl.find(
-        qn("w:tblPr") + "/" + qn("w:tblBorders"))
+    tblBorders = doc.tables[0]._tbl.find(qn("w:tblPr") + "/" + qn("w:tblBorders"))
     assert tblBorders.find(qn("w:top")).get(qn("w:val")) == "nil"
     assert tblBorders.find(qn("w:bottom")).get(qn("w:val")) == "nil"
 
 
 def test_table_top_bottom_can_be_re_enabled(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_with_style(
-        "| A | B |\n|---|---|\n| 1 | 2 |", tmp_path,
-        "table:\n  border:\n    edges: [top, bottom, insideH]\n")
-    tblBorders = doc.tables[0]._tbl.find(
-        qn("w:tblPr") + "/" + qn("w:tblBorders"))
+        "| A | B |\n|---|---|\n| 1 | 2 |",
+        tmp_path,
+        "table:\n  border:\n    edges: [top, bottom, insideH]\n",
+    )
+    tblBorders = doc.tables[0]._tbl.find(qn("w:tblPr") + "/" + qn("w:tblBorders"))
     assert tblBorders.find(qn("w:top")).get(qn("w:val")) == "single"
     assert tblBorders.find(qn("w:bottom")).get(qn("w:val")) == "single"
 
@@ -901,6 +967,7 @@ def test_table_top_bottom_can_be_re_enabled(tmp_path):
 # --------------------------------------------------------------------------- #
 def test_code_block_title_style_exists_and_based_on_code_block(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("```python\nx = 1\n```", tmp_path)
     title = doc.styles["Code Block Title"]
     # Based on Code Block (inherits the box/indent), overrides run look.
@@ -913,12 +980,16 @@ def test_code_block_title_style_exists_and_based_on_code_block(tmp_path):
 
 def test_code_block_language_uses_title_style(tmp_path):
     doc = _render_para("```python\nx = 1\n```", tmp_path)
-    langs = [p for p in doc.paragraphs
-             if p.text == "python" and p.style.name == "Code Block Title"]
+    langs = [
+        p
+        for p in doc.paragraphs
+        if p.text == "python" and p.style.name == "Code Block Title"
+    ]
     assert langs
     # The code itself is a separate Code Block paragraph.
-    code = [p for p in doc.paragraphs
-            if "x = 1" in p.text and p.style.name == "Code Block"]
+    code = [
+        p for p in doc.paragraphs if "x = 1" in p.text and p.style.name == "Code Block"
+    ]
     assert code
 
 
@@ -932,9 +1003,9 @@ def test_code_block_box_left_aligns_with_body(tmp_path):
     """The shaded box's left edge lines up with body text: the paragraph's left
     indent equals the border padding (which offsets the border outward)."""
     from docx.oxml.ns import qn
+
     doc = _render_para("```\ncode\n```", tmp_path)
-    ind = doc.styles["Code Block"].element.find(
-        qn("w:pPr") + "/" + qn("w:ind"))
+    ind = doc.styles["Code Block"].element.find(qn("w:pPr") + "/" + qn("w:ind"))
     assert ind is not None
     # padding_pt default 6 -> 120 twips left indent.
     assert int(ind.get(qn("w:left"))) == 120
@@ -942,25 +1013,27 @@ def test_code_block_box_left_aligns_with_body(tmp_path):
 
 def test_code_block_right_inset_by_default(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("```\ncode\n```", tmp_path)
-    ind = doc.styles["Code Block"].element.find(
-        qn("w:pPr") + "/" + qn("w:ind"))
+    ind = doc.styles["Code Block"].element.find(qn("w:pPr") + "/" + qn("w:ind"))
     # right = indent_in (0.25in = 360) + padding (6pt = 120) = 480 twips.
     assert int(ind.get(qn("w:right"))) == 480
 
 
 def test_code_block_indent_override(tmp_path):
     from docx.oxml.ns import qn
-    doc = _render_with_style("```\ncode\n```", tmp_path,
-                             "code_block:\n  indent_in: 0.5\n")
-    ind = doc.styles["Code Block"].element.find(
-        qn("w:pPr") + "/" + qn("w:ind"))
+
+    doc = _render_with_style(
+        "```\ncode\n```", tmp_path, "code_block:\n  indent_in: 0.5\n"
+    )
+    ind = doc.styles["Code Block"].element.find(qn("w:pPr") + "/" + qn("w:ind"))
     # right = 0.5in (720) + padding (120) = 840 twips.
     assert int(ind.get(qn("w:right"))) == 840
 
 
 def test_table_indent_matches_cell_left_margin(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("| A | B |\n|---|---|\n| 1 | 2 |", tmp_path)
     tblInd = doc.tables[0]._tbl.find(qn("w:tblPr") + "/" + qn("w:tblInd"))
     # tblInd equals the cell left margin (5pt -> 100 twips) so the table border
@@ -971,6 +1044,7 @@ def test_table_indent_matches_cell_left_margin(tmp_path):
 
 def test_table_indent_narrows_width_to_avoid_overflow(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("| A | B |\n|---|---|\n| 1 | 2 |", tmp_path)
     tblW = doc.tables[0]._tbl.find(qn("w:tblPr") + "/" + qn("w:tblW"))
     # Full-width table with an inset must be < 100% (5000 pct) so it fits.
@@ -980,8 +1054,10 @@ def test_table_indent_narrows_width_to_avoid_overflow(tmp_path):
 
 def test_table_indent_override_to_zero(tmp_path):
     from docx.oxml.ns import qn
-    doc = _render_with_style("| A | B |\n|---|---|\n| 1 | 2 |", tmp_path,
-                             "table:\n  indent_in: 0\n")
+
+    doc = _render_with_style(
+        "| A | B |\n|---|---|\n| 1 | 2 |", tmp_path, "table:\n  indent_in: 0\n"
+    )
     tblPr = doc.tables[0]._tbl.find(qn("w:tblPr"))
     # Right inset removed => full width. The left alignment (negative tblInd)
     # stays regardless of the right inset.
@@ -995,6 +1071,7 @@ def test_dump_config_cli(tmp_path, monkeypatch, capsys):
     import yaml as _yaml
 
     from md_to_docx import DEFAULT_STYLE, main
+
     monkeypatch.setattr("sys.argv", ["md-to-docx", "--dump-config"])
     with pytest.raises(SystemExit) as exc:
         main()
@@ -1009,10 +1086,18 @@ def test_dump_config_cli(tmp_path, monkeypatch, capsys):
 # --------------------------------------------------------------------------- #
 def test_doc_defaults_font_is_aptos(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("hello", tmp_path)
     styles_el = doc.styles.element
     rFonts = styles_el.find(
-        qn("w:docDefaults") + "/" + qn("w:rPrDefault") + "/" + qn("w:rPr") + "/" + qn("w:rFonts"))
+        qn("w:docDefaults")
+        + "/"
+        + qn("w:rPrDefault")
+        + "/"
+        + qn("w:rPr")
+        + "/"
+        + qn("w:rFonts")
+    )
     assert rFonts is not None
     assert rFonts.get(qn("w:ascii")) == "Aptos"
     assert rFonts.get(qn("w:hAnsi")) == "Aptos"
@@ -1021,10 +1106,18 @@ def test_doc_defaults_font_is_aptos(tmp_path):
 def test_doc_defaults_font_override(tmp_path):
     """Overriding the top-level `font` changes docDefaults."""
     from docx.oxml.ns import qn
+
     doc = _render_with_style("hello", tmp_path, "font: 'Comic Sans MS'\n")
     styles_el = doc.styles.element
     rFonts = styles_el.find(
-        qn("w:docDefaults") + "/" + qn("w:rPrDefault") + "/" + qn("w:rPr") + "/" + qn("w:rFonts"))
+        qn("w:docDefaults")
+        + "/"
+        + qn("w:rPrDefault")
+        + "/"
+        + qn("w:rPr")
+        + "/"
+        + qn("w:rFonts")
+    )
     assert rFonts is not None
     assert rFonts.get(qn("w:ascii")) == "Comic Sans MS"
 
@@ -1039,6 +1132,7 @@ def test_heading_font_default(tmp_path):
 def _heading_bottom_rule(doc, style_name):
     """Return the bottom-border element of a heading style, or None."""
     from docx.oxml.ns import qn
+
     pPr = doc.styles[style_name].element.find(qn("w:pPr"))
     if pPr is None:
         return None
@@ -1047,6 +1141,7 @@ def _heading_bottom_rule(doc, style_name):
 
 def test_h1_h2_have_bottom_rule_by_default(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_para("# H1\n\n## H2", tmp_path)
     h1_rule = _heading_bottom_rule(doc, "Heading 1")
     h2_rule = _heading_bottom_rule(doc, "Heading 2")
@@ -1063,9 +1158,12 @@ def test_h3_h6_have_no_bottom_rule_by_default(tmp_path):
 
 def test_heading_rule_override_color_and_width(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_with_style(
-        "# Title", tmp_path,
-        "headings:\n  1:\n    rule:\n      color: FF0000\n      width_pt: 3\n")
+        "# Title",
+        tmp_path,
+        "headings:\n  1:\n    rule:\n      color: FF0000\n      width_pt: 3\n",
+    )
     rule = _heading_bottom_rule(doc, "Heading 1")
     assert rule is not None
     assert rule.get(qn("w:color")) == "FF0000"
@@ -1073,16 +1171,18 @@ def test_heading_rule_override_color_and_width(tmp_path):
 
 
 def test_heading_rule_disabled_with_null(tmp_path):
-    doc = _render_with_style("# Title", tmp_path,
-                             "headings:\n  1:\n    rule: null\n")
+    doc = _render_with_style("# Title", tmp_path, "headings:\n  1:\n    rule: null\n")
     assert _heading_bottom_rule(doc, "Heading 1") is None
 
 
 def test_heading_rule_added_to_lower_level(tmp_path):
     from docx.oxml.ns import qn
+
     doc = _render_with_style(
-        "### Sub", tmp_path,
-        "headings:\n  3:\n    rule:\n      color: '00AA00'\n      width_pt: 1\n")
+        "### Sub",
+        tmp_path,
+        "headings:\n  3:\n    rule:\n      color: '00AA00'\n      width_pt: 1\n",
+    )
     rule = _heading_bottom_rule(doc, "Heading 3")
     assert rule is not None and rule.get(qn("w:color")) == "00AA00"
 
@@ -1092,9 +1192,9 @@ def test_heading_style_has_no_theme_font(tmp_path):
     override an explicit font; setting the font must strip those theme attrs so
     the configured face (Aptos Display) actually renders in Word."""
     from docx.oxml.ns import qn
+
     doc = _render_para("# Title", tmp_path)
-    rFonts = doc.styles["Heading 1"].element.find(
-        qn("w:rPr") + "/" + qn("w:rFonts"))
+    rFonts = doc.styles["Heading 1"].element.find(qn("w:rPr") + "/" + qn("w:rFonts"))
     assert rFonts is not None
     for attr in ("asciiTheme", "hAnsiTheme", "eastAsiaTheme", "cstheme"):
         assert rFonts.get(qn(f"w:{attr}")) is None, f"{attr} should be stripped"
@@ -1103,16 +1203,18 @@ def test_heading_style_has_no_theme_font(tmp_path):
 
 def test_heading_font_override(tmp_path):
     """Overriding heading_font changes all headings that don't set their own."""
-    doc = _render_with_style("# H1\n\n## H2", tmp_path,
-                             "heading_font: Georgia\n")
+    doc = _render_with_style("# H1\n\n## H2", tmp_path, "heading_font: Georgia\n")
     assert doc.styles["Heading 1"].font.name == "Georgia"
     assert doc.styles["Heading 2"].font.name == "Georgia"
 
 
 def test_per_level_heading_font_wins_over_heading_font(tmp_path):
     """A per-level font overrides heading_font for just that level."""
-    doc = _render_with_style("# H1\n\n## H2", tmp_path,
-                             "heading_font: Georgia\nheadings:\n  1:\n    font: Impact\n")
+    doc = _render_with_style(
+        "# H1\n\n## H2",
+        tmp_path,
+        "heading_font: Georgia\nheadings:\n  1:\n    font: Impact\n",
+    )
     assert doc.styles["Heading 1"].font.name == "Impact"
     assert doc.styles["Heading 2"].font.name == "Georgia"
 
@@ -1136,9 +1238,17 @@ def test_unused_template_styles_hidden_from_gallery(tmp_path):
     doc = _render_para("# H\n\ntext\n\n> quote", tmp_path)
     visible = {s.name for s in doc.styles if _safe_quick(s)}
     expected = {
-        "Normal", "Heading 1", "Heading 2", "Heading 3", "Heading 4",
-        "Heading 5", "Heading 6", "Blockquote", "Code Block",
-        "Code Block Title", "Inline Code",
+        "Normal",
+        "Heading 1",
+        "Heading 2",
+        "Heading 3",
+        "Heading 4",
+        "Heading 5",
+        "Heading 6",
+        "Blockquote",
+        "Code Block",
+        "Code Block Title",
+        "Inline Code",
     }
     assert visible == expected
     # A few template styles that must NOT be in the gallery anymore.
@@ -1157,6 +1267,7 @@ def test_custom_styles_are_visible_in_word(tmp_path):
     """Our custom styles are flagged qFormat (quick_style) + uiPriority so Word
     shows them in the Styles gallery / pane instead of hiding them."""
     from docx.oxml.ns import qn
+
     doc = _render_para("> quote", tmp_path)
     for name in ("Blockquote", "Code Block", "Inline Code"):
         style = doc.styles[name]
@@ -1176,6 +1287,7 @@ def test_md_quote_style_carries_left_bar(tmp_path):
     spacing/ind), so Word accepts it and the whole quote is editable via the
     style."""
     from docx.oxml.ns import qn
+
     doc = _render_para("> quoted", tmp_path)
     pPr = doc.styles["Blockquote"].element.find(qn("w:pPr"))
     assert pPr is not None

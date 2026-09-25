@@ -53,7 +53,7 @@ DEFAULT_STYLE = {
     "heading_font": "Aptos Display",
     "page": {
         # Letter by default. Either a named size or explicit width/height inches.
-        "size": "letter",              # "letter" | "a4"
+        "size": "letter",  # "letter" | "a4"
         "margins_in": {"top": 1.0, "bottom": 1.0, "left": 1.25, "right": 1.25},
     },
     "body": {
@@ -74,30 +74,72 @@ DEFAULT_STYLE = {
     # between the text and the line). ``rule: null`` (the default for H3-H6)
     # means no line. H1 and H2 get a rule by default.
     "headings": {
-        1: {"font": None, "size_pt": 20, "color": "365F91", "bold": True,
-            "italic": False, "space_before_pt": 18, "space_after_pt": 4,
-            "rule": {"width_pt": 1.0, "color": "365F91", "space_pt": 2}},
-        2: {"font": None, "size_pt": 16, "color": "4F81BD", "bold": True,
-            "italic": False, "space_before_pt": 12, "space_after_pt": 4,
-            "rule": {"width_pt": 0.75, "color": "4F81BD", "space_pt": 2}},
-        3: {"font": None, "size_pt": 13, "color": "4F81BD", "bold": True,
-            "italic": False, "space_before_pt": 10, "space_after_pt": 2,
-            "rule": None},
-        4: {"font": None, "size_pt": 12, "color": "4F81BD", "bold": True,
-            "italic": False, "space_before_pt": 10, "space_after_pt": 2,
-            "rule": None},
-        5: {"font": None, "size_pt": 11, "color": "243F60", "bold": True,
-            "italic": False, "space_before_pt": 8, "space_after_pt": 2,
-            "rule": None},
-        6: {"font": None, "size_pt": 11, "color": "243F60", "bold": False,
-            "italic": True, "space_before_pt": 8, "space_after_pt": 2,
-            "rule": None},
+        1: {
+            "font": None,
+            "size_pt": 20,
+            "color": "365F91",
+            "bold": True,
+            "italic": False,
+            "space_before_pt": 18,
+            "space_after_pt": 4,
+            "rule": {"width_pt": 1.0, "color": "365F91", "space_pt": 2},
+        },
+        2: {
+            "font": None,
+            "size_pt": 16,
+            "color": "4F81BD",
+            "bold": True,
+            "italic": False,
+            "space_before_pt": 12,
+            "space_after_pt": 4,
+            "rule": {"width_pt": 0.75, "color": "4F81BD", "space_pt": 2},
+        },
+        3: {
+            "font": None,
+            "size_pt": 13,
+            "color": "4F81BD",
+            "bold": True,
+            "italic": False,
+            "space_before_pt": 10,
+            "space_after_pt": 2,
+            "rule": None,
+        },
+        4: {
+            "font": None,
+            "size_pt": 12,
+            "color": "4F81BD",
+            "bold": True,
+            "italic": False,
+            "space_before_pt": 10,
+            "space_after_pt": 2,
+            "rule": None,
+        },
+        5: {
+            "font": None,
+            "size_pt": 11,
+            "color": "243F60",
+            "bold": True,
+            "italic": False,
+            "space_before_pt": 8,
+            "space_after_pt": 2,
+            "rule": None,
+        },
+        6: {
+            "font": None,
+            "size_pt": 11,
+            "color": "243F60",
+            "bold": False,
+            "italic": True,
+            "space_before_pt": 8,
+            "space_after_pt": 2,
+            "rule": None,
+        },
     },
     "inline_code": {
         "font": "Consolas",
         "size_pt": 10,
-        "color": None,                 # optional run color
-        "fill": None,                  # optional run shading (hex) or None
+        "color": None,  # optional run color
+        "fill": None,  # optional run shading (hex) or None
     },
     "code_block": {
         "font": "Consolas",
@@ -106,11 +148,11 @@ DEFAULT_STYLE = {
         "padding_pt": 6,
         "space_before_pt": 8,
         "space_after_pt": 8,
-        "indent_in": 0.25,             # left inset so the box doesn't run full-width
+        "indent_in": 0.25,  # left inset so the box doesn't run full-width
         "caption": {"size_pt": 8, "color": "808080", "italic": True},
     },
     "blockquote": {
-        "bar_color": "365F91",         # same blue as Heading 1
+        "bar_color": "365F91",  # same blue as Heading 1
         "bar_width_pt": 2.25,
         "bar_gap_pt": 12,
         "indent_in": 0.25,
@@ -126,7 +168,7 @@ DEFAULT_STYLE = {
             # Both levels use the Symbol font's filled bullet (U+F0B7). The
             # Symbol font has no open/hollow bullet glyph, so the sub-bullet
             # reuses the same mark rather than a broken glyph.
-            "glyphs": ["\uF0B7", "\uF0B7"],     # level 0, level 1
+            "glyphs": ["\uf0b7", "\uf0b7"],  # level 0, level 1
             "glyph_fonts": ["Symbol", "Symbol"],
             # Level-0 indent matches the ordered list (0.5") so bullet and
             # numbered lists align; level 1 nests one step deeper.
@@ -154,14 +196,14 @@ DEFAULT_STYLE = {
         # A heavier rule directly under the header row.
         "header": {
             "bold": True,
-            "fill": None,                       # no shading behind the header
+            "fill": None,  # no shading behind the header
             "underline_width_pt": 1.0,
             "underline_color": "404040",
         },
         # Balanced vertical padding with a little left inset.
         "cell_margins_pt": {"top": 4, "bottom": 4, "left": 5, "right": 10},
-        "width": "full",               # "full" | "auto"
-        "indent_in": 0.25,             # left inset so the table doesn't run full-width
+        "width": "full",  # "full" | "auto"
+        "indent_in": 0.25,  # left inset so the table doesn't run full-width
     },
     "hr": {
         # A markdown ``---`` renders as a horizontal line when ``rule`` is true.
@@ -198,8 +240,7 @@ def _deep_merge(base: dict, override: dict) -> dict:
     """
     result = deepcopy(base)
     for key, value in override.items():
-        if (key in result and isinstance(result[key], dict)
-                and isinstance(value, dict)):
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
             result[key] = _deep_merge(result[key], value)
         else:
             result[key] = deepcopy(value)
@@ -282,8 +323,9 @@ def _coerce_color(value, default, where):
     hex_value = _as_hex(value)
     if hex_value:
         return RGBColor.from_string(hex_value)
-    print(f"WARNING: invalid color {value!r} for {where}; using default",
-          file=sys.stderr)
+    print(
+        f"WARNING: invalid color {value!r} for {where}; using default", file=sys.stderr
+    )
     default_hex = _as_hex(default)
     return RGBColor.from_string(default_hex) if default_hex else None
 
@@ -295,8 +337,10 @@ def _coerce_number(value, default, where):
     try:
         return float(value)
     except (ValueError, TypeError):
-        print(f"WARNING: invalid number {value!r} for {where}; using default",
-              file=sys.stderr)
+        print(
+            f"WARNING: invalid number {value!r} for {where}; using default",
+            file=sys.stderr,
+        )
         return default
 
 
@@ -326,12 +370,14 @@ class StyleConfig:
 
     # -- typed getters ------------------------------------------------------- #
     def num(self, section: str, key: str, default=0):
-        return _coerce_number(self.section(section).get(key), default,
-                              f"{section}.{key}")
+        return _coerce_number(
+            self.section(section).get(key), default, f"{section}.{key}"
+        )
 
     def color(self, section: str, key: str, default=None):
-        return _coerce_color(self.section(section).get(key), default,
-                             f"{section}.{key}")
+        return _coerce_color(
+            self.section(section).get(key), default, f"{section}.{key}"
+        )
 
     def flag(self, section: str, key: str, default=False):
         val = self.section(section).get(key, default)
@@ -369,8 +415,8 @@ def slugify_heading(text: str) -> str:
     text = re.sub(r"[*_`]", "", text)  # drop emphasis/code markers
     text = text.strip().lower()
     text = re.sub(r"[^\w\s-]", "", text)  # drop punctuation
-    text = re.sub(r"\s+", "-", text)      # spaces -> hyphens
-    text = re.sub(r"-+", "-", text)       # collapse repeated hyphens
+    text = re.sub(r"\s+", "-", text)  # spaces -> hyphens
+    text = re.sub(r"-+", "-", text)  # collapse repeated hyphens
     return text.strip("-")
 
 
@@ -441,13 +487,17 @@ def parse_markdown(text: str) -> list:
                 i += 1
             if i < len(lines):
                 i += 1  # skip the closing ```
-            blocks.append({"type": "code_block", "lines": code_lines, "language": language})
+            blocks.append(
+                {"type": "code_block", "lines": code_lines, "language": language}
+            )
             continue
 
         # Blockquote (email body) — collect all consecutive > lines
         elif line.startswith("> ") or line.strip() == ">":
             quote_lines = []
-            while i < len(lines) and (lines[i].startswith("> ") or lines[i].strip() == ">"):
+            while i < len(lines) and (
+                lines[i].startswith("> ") or lines[i].strip() == ">"
+            ):
                 content = lines[i][2:] if lines[i].startswith("> ") else ""
                 quote_lines.append(content)
                 i += 1
@@ -464,12 +514,17 @@ def parse_markdown(text: str) -> list:
             continue
 
         # Bold metadata lines (From:, To:, Subject:, etc.) — group consecutive ones
-        elif line.startswith(("**From:**", "**To:**", "**Subject:**",
-                              "**CC:**", "**Body:**", "**Body")):
+        elif line.startswith(
+            ("**From:**", "**To:**", "**Subject:**", "**CC:**", "**Body:**", "**Body")
+        ):
             meta_lines = []
-            while i < len(lines) and (lines[i].startswith("**From:") or lines[i].startswith("**To:") or \
-                  lines[i].startswith("**Subject:") or lines[i].startswith("**CC:") or \
-                  lines[i].startswith("**Body")):
+            while i < len(lines) and (
+                lines[i].startswith("**From:")
+                or lines[i].startswith("**To:")
+                or lines[i].startswith("**Subject:")
+                or lines[i].startswith("**CC:")
+                or lines[i].startswith("**Body")
+            ):
                 meta_lines.append(lines[i].rstrip())
                 i += 1
             blocks.append({"type": "meta", "lines": meta_lines})
@@ -494,14 +549,20 @@ def parse_markdown(text: str) -> list:
                     while i < len(lines):
                         next_line = lines[i]
                         # Indented continuation (2+ spaces, not a new bullet)
-                        if re.match(r"^\s{2,}\S", next_line) and not next_line.strip().startswith("- "):
+                        if re.match(
+                            r"^\s{2,}\S", next_line
+                        ) and not next_line.strip().startswith("- "):
                             # A soft-wrapped line joins with a space (so inline
                             # emphasis spanning the wrap still pairs up); only a
                             # trailing double-space forces a hard line break.
                             if item_text.endswith("  "):
-                                item_text = item_text.rstrip() + "\n" + next_line.strip()
+                                item_text = (
+                                    item_text.rstrip() + "\n" + next_line.strip()
+                                )
                             else:
-                                item_text = item_text.rstrip("\n") + " " + next_line.strip()
+                                item_text = (
+                                    item_text.rstrip("\n") + " " + next_line.strip()
+                                )
                             i += 1
                         else:
                             break
@@ -528,14 +589,20 @@ def parse_markdown(text: str) -> list:
                             sub_items.append(next_line.strip()[2:])  # strip "- " prefix
                             i += 1
                         # Indented continuation text (e.g., "   OR no match found")
-                        elif re.match(r"^\s{2,}\S", next_line) and not re.match(r"^\d+\.\s", next_line):
+                        elif re.match(r"^\s{2,}\S", next_line) and not re.match(
+                            r"^\d+\.\s", next_line
+                        ):
                             # Soft wrap joins with a space so inline emphasis
                             # spanning the wrap still pairs; a trailing
                             # double-space forces a hard line break.
                             if item_text.endswith("  "):
-                                item_text = item_text.rstrip() + "\n" + next_line.strip()
+                                item_text = (
+                                    item_text.rstrip() + "\n" + next_line.strip()
+                                )
                             else:
-                                item_text = item_text.rstrip("\n") + " " + next_line.strip()
+                                item_text = (
+                                    item_text.rstrip("\n") + " " + next_line.strip()
+                                )
                             i += 1
                         else:
                             break
@@ -560,13 +627,20 @@ def parse_markdown(text: str) -> list:
             # Collect consecutive non-empty lines as a paragraph
             # Preserve trailing double-space as line breaks
             para_lines = []
-            while i < len(lines) and lines[i].strip() and not lines[i].startswith("#") \
-                  and not lines[i].startswith("|") and not lines[i].startswith("> ") \
-                  and not lines[i].startswith("---") and not lines[i].startswith("- ") \
-                  and not re.match(r"^\d+\.\s", lines[i]) \
-                  and not lines[i].startswith("**From:") \
-                  and not lines[i].startswith("**To:") and not lines[i].startswith("**Subject:") \
-                  and not lines[i].startswith("**Body"):
+            while (
+                i < len(lines)
+                and lines[i].strip()
+                and not lines[i].startswith("#")
+                and not lines[i].startswith("|")
+                and not lines[i].startswith("> ")
+                and not lines[i].startswith("---")
+                and not lines[i].startswith("- ")
+                and not re.match(r"^\d+\.\s", lines[i])
+                and not lines[i].startswith("**From:")
+                and not lines[i].startswith("**To:")
+                and not lines[i].startswith("**Subject:")
+                and not lines[i].startswith("**Body")
+            ):
                 para_lines.append(lines[i])
                 i += 1
             # Guard against no progress: if the paragraph collector consumed no
@@ -630,14 +704,14 @@ def _build_hyperlink_run(text: str):
     The generated ``Hyperlink`` character style carries the configured color and
     underline, so the link is styled consistently and editable in Word.
     """
-    run = OxmlElement('w:r')
-    rPr = OxmlElement('w:rPr')
-    rStyle = OxmlElement('w:rStyle')
-    rStyle.set(qn('w:val'), STYLE_HYPERLINK)
+    run = OxmlElement("w:r")
+    rPr = OxmlElement("w:rPr")
+    rStyle = OxmlElement("w:rStyle")
+    rStyle.set(qn("w:val"), STYLE_HYPERLINK)
     rPr.append(rStyle)
     run.append(rPr)
-    t = OxmlElement('w:t')
-    t.set(qn('xml:space'), 'preserve')
+    t = OxmlElement("w:t")
+    t.set(qn("xml:space"), "preserve")
     t.text = text
     run.append(t)
     return run
@@ -645,8 +719,8 @@ def _build_hyperlink_run(text: str):
 
 def _add_internal_hyperlink(paragraph, text: str, bookmark: str):
     """Add a run that hyperlinks to an internal bookmark (w:anchor)."""
-    hyperlink = OxmlElement('w:hyperlink')
-    hyperlink.set(qn('w:anchor'), bookmark)
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("w:anchor"), bookmark)
     hyperlink.append(_build_hyperlink_run(text))
     paragraph._p.append(hyperlink)
 
@@ -659,8 +733,8 @@ def _add_external_hyperlink(paragraph, text: str, url: str):
         "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
         is_external=True,
     )
-    hyperlink = OxmlElement('w:hyperlink')
-    hyperlink.set(qn('r:id'), r_id)
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
     hyperlink.append(_build_hyperlink_run(text))
     paragraph._p.append(hyperlink)
 
@@ -679,10 +753,18 @@ def _apply_page_setup(doc, sc: "StyleConfig"):
     section.page_height = Inches(h)
 
     margins = page.get("margins_in", {}) or {}
-    section.top_margin = Inches(_coerce_number(margins.get("top"), 1.0, "page.margins_in.top"))
-    section.bottom_margin = Inches(_coerce_number(margins.get("bottom"), 1.0, "page.margins_in.bottom"))
-    section.left_margin = Inches(_coerce_number(margins.get("left"), 1.25, "page.margins_in.left"))
-    section.right_margin = Inches(_coerce_number(margins.get("right"), 1.25, "page.margins_in.right"))
+    section.top_margin = Inches(
+        _coerce_number(margins.get("top"), 1.0, "page.margins_in.top")
+    )
+    section.bottom_margin = Inches(
+        _coerce_number(margins.get("bottom"), 1.0, "page.margins_in.bottom")
+    )
+    section.left_margin = Inches(
+        _coerce_number(margins.get("left"), 1.25, "page.margins_in.left")
+    )
+    section.right_margin = Inches(
+        _coerce_number(margins.get("right"), 1.25, "page.margins_in.right")
+    )
 
 
 def _set_default_font(doc, font: str):
@@ -697,25 +779,25 @@ def _set_default_font(doc, font: str):
     if not font or not isinstance(font, str):
         return
     styles_el = doc.styles.element  # <w:styles>
-    docDefaults = styles_el.find(qn('w:docDefaults'))
+    docDefaults = styles_el.find(qn("w:docDefaults"))
     if docDefaults is None:
-        docDefaults = OxmlElement('w:docDefaults')
+        docDefaults = OxmlElement("w:docDefaults")
         # docDefaults must be the first child of <w:styles>.
         styles_el.insert(0, docDefaults)
-    rPrDefault = docDefaults.find(qn('w:rPrDefault'))
+    rPrDefault = docDefaults.find(qn("w:rPrDefault"))
     if rPrDefault is None:
-        rPrDefault = OxmlElement('w:rPrDefault')
+        rPrDefault = OxmlElement("w:rPrDefault")
         docDefaults.append(rPrDefault)
-    rPr = rPrDefault.find(qn('w:rPr'))
+    rPr = rPrDefault.find(qn("w:rPr"))
     if rPr is None:
-        rPr = OxmlElement('w:rPr')
+        rPr = OxmlElement("w:rPr")
         rPrDefault.append(rPr)
-    existing = rPr.find(qn('w:rFonts'))
+    existing = rPr.find(qn("w:rFonts"))
     if existing is not None:
         rPr.remove(existing)
-    rFonts = OxmlElement('w:rFonts')
-    for attr in ('ascii', 'hAnsi', 'cs'):
-        rFonts.set(qn(f'w:{attr}'), font)
+    rFonts = OxmlElement("w:rFonts")
+    for attr in ("ascii", "hAnsi", "cs"):
+        rFonts.set(qn(f"w:{attr}"), font)
     # rFonts must lead the run properties.
     rPr.insert(0, rFonts)
 
@@ -739,10 +821,10 @@ def _style_outline_level(style, level: int):
     Word's navigation pane and PDF bookmarks treat the style as a heading.
     """
     pPr = style.element.get_or_add_pPr()
-    existing = pPr.find(qn('w:outlineLvl'))
+    existing = pPr.find(qn("w:outlineLvl"))
     if existing is not None:
         pPr.remove(existing)
-    pPr.append(_make_element('w:outlineLvl', val=str(level)))
+    pPr.append(_make_element("w:outlineLvl", val=str(level)))
 
 
 def _style_bottom_rule(style, *, width_pt=1.0, color="000000", space_pt=2):
@@ -755,18 +837,22 @@ def _style_bottom_rule(style, *, width_pt=1.0, color="000000", space_pt=2):
     ``w:spacing``/``w:ind``).
     """
     pPr = style.element.get_or_add_pPr()
-    existing = pPr.find(qn('w:pBdr'))
+    existing = pPr.find(qn("w:pBdr"))
     if existing is not None:
         pPr.remove(existing)
-    pBdr = OxmlElement('w:pBdr')
-    sz = str(max(1, int(round(width_pt * 8))))   # points -> eighths of a point
-    bottom = _make_element('w:bottom', val='single', sz=sz,
-                           space=str(int(round(space_pt))),
-                           color=_as_hex(color) or "000000")
+    pBdr = OxmlElement("w:pBdr")
+    sz = str(max(1, int(round(width_pt * 8))))  # points -> eighths of a point
+    bottom = _make_element(
+        "w:bottom",
+        val="single",
+        sz=sz,
+        space=str(int(round(space_pt))),
+        color=_as_hex(color) or "000000",
+    )
     pBdr.append(bottom)
     # w:pBdr must precede w:shd/w:spacing/w:ind in pPr (schema order).
     following = None
-    for tag in ('w:shd', 'w:spacing', 'w:ind'):
+    for tag in ("w:shd", "w:spacing", "w:ind"):
         following = pPr.find(qn(tag))
         if following is not None:
             break
@@ -793,14 +879,14 @@ def _set_style_font(style, font: str):
     the theme attributes makes the explicit font actually take effect in Word.
     """
     style.font.name = font
-    rPr = style.element.find(qn('w:rPr'))
+    rPr = style.element.find(qn("w:rPr"))
     if rPr is None:
         return
-    rFonts = rPr.find(qn('w:rFonts'))
+    rFonts = rPr.find(qn("w:rFonts"))
     if rFonts is None:
         return
     for attr in _RFONTS_THEME_ATTRS:
-        theme_qn = qn(f'w:{attr}')
+        theme_qn = qn(f"w:{attr}")
         if rFonts.get(theme_qn) is not None:
             del rFonts.attrib[theme_qn]
 
@@ -834,11 +920,11 @@ def _hide_style_from_gallery(style):
     style itself is left intact so any content already using it still renders.
     """
     pr = style.element
-    qf = pr.find(qn('w:qFormat'))
+    qf = pr.find(qn("w:qFormat"))
     if qf is not None:
         pr.remove(qf)
     # semiHidden + unhideWhenUsed: Word hides these from the default pane view.
-    for tag in ('w:semiHidden', 'w:unhideWhenUsed'):
+    for tag in ("w:semiHidden", "w:unhideWhenUsed"):
         if pr.find(qn(tag)) is None:
             pr.append(_make_element(tag))
 
@@ -847,11 +933,21 @@ def _hide_style_from_gallery(style):
 # base template flags as a quick style gets hidden so the gallery isn't cluttered
 # with styles md_to_docx never applies. Hyperlink is intentionally omitted (Word
 # applies it automatically and doesn't surface it in the gallery anyway).
-_GALLERY_KEEP_IDS = frozenset({
-    "Normal",
-    "Heading1", "Heading2", "Heading3", "Heading4", "Heading5", "Heading6",
-    STYLE_QUOTE, STYLE_CODE, STYLE_CODE_TITLE, STYLE_CODE_CHAR,
-})
+_GALLERY_KEEP_IDS = frozenset(
+    {
+        "Normal",
+        "Heading1",
+        "Heading2",
+        "Heading3",
+        "Heading4",
+        "Heading5",
+        "Heading6",
+        STYLE_QUOTE,
+        STYLE_CODE,
+        STYLE_CODE_TITLE,
+        STYLE_CODE_CHAR,
+    }
+)
 
 
 def _prune_gallery_styles(doc):
@@ -886,7 +982,7 @@ def _mark_style_visible(style, priority=None):
         style.priority = priority
     # Clear any hide flags Word might otherwise honor.
     pr = style.element
-    for tag in ('w:semiHidden', 'w:unhideWhenUsed'):
+    for tag in ("w:semiHidden", "w:unhideWhenUsed"):
         el = pr.find(qn(tag))
         if el is not None:
             pr.remove(el)
@@ -902,23 +998,30 @@ def _apply_code_box_to_pPr(pPr, fill, space_pt):
     Shared by the ``Code Block`` style generator and the direct-formatting helper.
     """
     hexfill = _as_hex(fill) or "F2F2F2"
-    for tag in ('w:pBdr', 'w:shd'):
+    for tag in ("w:pBdr", "w:shd"):
         existing = pPr.find(qn(tag))
         if existing is not None:
             pPr.remove(existing)
 
-    pBdr = OxmlElement('w:pBdr')
-    for side in ('top', 'left', 'bottom', 'right'):
-        pBdr.append(_make_element(f'w:{side}', val='single', sz='4',
-                                  space=str(int(round(space_pt))), color=hexfill))
-    shd = OxmlElement('w:shd')
-    shd.set(qn('w:val'), 'clear')
-    shd.set(qn('w:color'), 'auto')
-    shd.set(qn('w:fill'), hexfill)
+    pBdr = OxmlElement("w:pBdr")
+    for side in ("top", "left", "bottom", "right"):
+        pBdr.append(
+            _make_element(
+                f"w:{side}",
+                val="single",
+                sz="4",
+                space=str(int(round(space_pt))),
+                color=hexfill,
+            )
+        )
+    shd = OxmlElement("w:shd")
+    shd.set(qn("w:val"), "clear")
+    shd.set(qn("w:color"), "auto")
+    shd.set(qn("w:fill"), hexfill)
 
     # pBdr and shd must precede spacing/ind in pPr (schema order).
     following = None
-    for tag in ('w:spacing', 'w:ind'):
+    for tag in ("w:spacing", "w:ind"):
         following = pPr.find(qn(tag))
         if following is not None:
             break
@@ -930,12 +1033,24 @@ def _apply_code_box_to_pPr(pPr, fill, space_pt):
         pPr.append(shd)
 
 
-def _define_paragraph_style(doc, name, *, display_name=None, font=None,
-                            size_pt=None, color=None,
-                            bold=None, italic=None, space_before_pt=None,
-                            space_after_pt=None, line_spacing=None,
-                            left_indent_in=None, right_indent_in=None,
-                            outline_level=None, base="Normal"):
+def _define_paragraph_style(
+    doc,
+    name,
+    *,
+    display_name=None,
+    font=None,
+    size_pt=None,
+    color=None,
+    bold=None,
+    italic=None,
+    space_before_pt=None,
+    space_after_pt=None,
+    line_spacing=None,
+    left_indent_in=None,
+    right_indent_in=None,
+    outline_level=None,
+    base="Normal",
+):
     """Create/update a named paragraph style from config values.
 
     ``name`` is the styleId (stable, referenced by paragraphs); ``display_name``
@@ -961,8 +1076,11 @@ def _define_paragraph_style(doc, name, *, display_name=None, font=None,
     if size_pt is not None:
         fmt.size = Pt(size_pt)
     if color is not None:
-        fmt.color.rgb = color if isinstance(color, RGBColor) \
+        fmt.color.rgb = (
+            color
+            if isinstance(color, RGBColor)
             else RGBColor.from_string(str(color).upper())
+        )
     if bold is not None:
         fmt.bold = bold
     if italic is not None:
@@ -983,8 +1101,17 @@ def _define_paragraph_style(doc, name, *, display_name=None, font=None,
     return style
 
 
-def _define_char_style(doc, name, *, display_name=None, font=None, size_pt=None,
-                       color=None, underline=None, fill=None):
+def _define_char_style(
+    doc,
+    name,
+    *,
+    display_name=None,
+    font=None,
+    size_pt=None,
+    color=None,
+    underline=None,
+    fill=None,
+):
     """Create/update a named character style from config values.
 
     ``name`` is the styleId; ``display_name`` is the gallery label (defaults to
@@ -1001,21 +1128,24 @@ def _define_char_style(doc, name, *, display_name=None, font=None, size_pt=None,
     if size_pt is not None:
         fmt.size = Pt(size_pt)
     if color is not None:
-        fmt.color.rgb = color if isinstance(color, RGBColor) \
+        fmt.color.rgb = (
+            color
+            if isinstance(color, RGBColor)
             else RGBColor.from_string(str(color).upper())
+        )
     if underline is not None:
         fmt.underline = underline
     if fill is not None:
         hexfill = _as_hex(fill)
         if hexfill:
             rPr = style.element.get_or_add_rPr()
-            existing = rPr.find(qn('w:shd'))
+            existing = rPr.find(qn("w:shd"))
             if existing is not None:
                 rPr.remove(existing)
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'), 'clear')
-            shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), hexfill)
+            shd = OxmlElement("w:shd")
+            shd.set(qn("w:val"), "clear")
+            shd.set(qn("w:color"), "auto")
+            shd.set(qn("w:fill"), hexfill)
             rPr.append(shd)
     return style
 
@@ -1031,7 +1161,8 @@ def _build_styles(doc, sc: "StyleConfig"):
 
     # 2. Normal (body). font=None => inherit the document default.
     _define_paragraph_style(
-        doc, "Normal",
+        doc,
+        "Normal",
         font=sc.text("body", "font"),
         size_pt=sc.num("body", "size_pt", 11),
         color=sc.color("body", "color", default="000000"),
@@ -1049,16 +1180,19 @@ def _build_styles(doc, sc: "StyleConfig"):
         own_font = h.get("font")
         font = own_font if own_font is not None else heading_font
         heading_style = _define_paragraph_style(
-            doc, f"Heading {level}",
+            doc,
+            f"Heading {level}",
             font=font,
             size_pt=_coerce_number(h.get("size_pt"), 11, f"headings.{level}.size_pt"),
             color=_coerce_color(h.get("color"), "000000", f"headings.{level}.color"),
             bold=bool(h.get("bold", False)),
             italic=bool(h.get("italic", False)),
-            space_before_pt=_coerce_number(h.get("space_before_pt"), 0,
-                                           f"headings.{level}.space_before_pt"),
-            space_after_pt=_coerce_number(h.get("space_after_pt"), 0,
-                                          f"headings.{level}.space_after_pt"),
+            space_before_pt=_coerce_number(
+                h.get("space_before_pt"), 0, f"headings.{level}.space_before_pt"
+            ),
+            space_after_pt=_coerce_number(
+                h.get("space_after_pt"), 0, f"headings.{level}.space_after_pt"
+            ),
             outline_level=level - 1,
         )
         # Optional under-heading rule (bottom border on the style).
@@ -1066,11 +1200,13 @@ def _build_styles(doc, sc: "StyleConfig"):
         if isinstance(rule, dict):
             _style_bottom_rule(
                 heading_style,
-                width_pt=_coerce_number(rule.get("width_pt"), 1.0,
-                                        f"headings.{level}.rule.width_pt"),
+                width_pt=_coerce_number(
+                    rule.get("width_pt"), 1.0, f"headings.{level}.rule.width_pt"
+                ),
                 color=_as_hex(rule.get("color")) or "000000",
-                space_pt=_coerce_number(rule.get("space_pt"), 2,
-                                        f"headings.{level}.rule.space_pt"),
+                space_pt=_coerce_number(
+                    rule.get("space_pt"), 2, f"headings.{level}.rule.space_pt"
+                ),
             )
 
     # 4. Blockquote paragraph style (indent + spacing + the left bar). Folding
@@ -1078,13 +1214,14 @@ def _build_styles(doc, sc: "StyleConfig"):
     #    paragraph — makes the whole blockquote look editable in Word by editing
     #    the one style.
     quote_style = _define_paragraph_style(
-        doc, STYLE_QUOTE,
+        doc,
+        STYLE_QUOTE,
         display_name=STYLE_DISPLAY_NAMES[STYLE_QUOTE],
         space_after_pt=sc.num("blockquote", "space_after_pt", 4),
         left_indent_in=sc.num("blockquote", "indent_in", 0.25),
     )
     quote_pPr = quote_style.element.get_or_add_pPr()
-    existing_bdr = quote_pPr.find(qn('w:pBdr'))
+    existing_bdr = quote_pPr.find(qn("w:pBdr"))
     if existing_bdr is not None:
         quote_pPr.remove(existing_bdr)
     quote_pBdr = _build_blockquote_pBdr(
@@ -1095,7 +1232,7 @@ def _build_styles(doc, sc: "StyleConfig"):
     # w:pBdr must precede w:shd/w:spacing/w:ind in pPr (schema order); insert it
     # before whichever of those exists, else append.
     following = None
-    for tag in ('w:shd', 'w:spacing', 'w:ind'):
+    for tag in ("w:shd", "w:spacing", "w:ind"):
         following = quote_pPr.find(qn(tag))
         if following is not None:
             break
@@ -1118,7 +1255,8 @@ def _build_styles(doc, sc: "StyleConfig"):
     cb_right_inset = sc.num("code_block", "indent_in", 0.25)
     cb_fill = sc.text("code_block", "fill", "F2F2F2")
     code_style = _define_paragraph_style(
-        doc, STYLE_CODE,
+        doc,
+        STYLE_CODE,
         display_name=STYLE_DISPLAY_NAMES[STYLE_CODE],
         font=sc.text("code_block", "font", "Consolas"),
         size_pt=sc.num("code_block", "size_pt", 9),
@@ -1135,35 +1273,40 @@ def _build_styles(doc, sc: "StyleConfig"):
     #     look (small italic gray). ``next`` returns to Code Block after it.
     caption_cfg = sc.section("code_block").get("caption", {}) or {}
     title_style = _define_paragraph_style(
-        doc, STYLE_CODE_TITLE,
+        doc,
+        STYLE_CODE_TITLE,
         display_name=STYLE_DISPLAY_NAMES[STYLE_CODE_TITLE],
         base=STYLE_CODE,
-        size_pt=_coerce_number(caption_cfg.get("size_pt"), 8,
-                               "code_block.caption.size_pt"),
-        color=_coerce_color(caption_cfg.get("color"), "808080",
-                            "code_block.caption.color"),
+        size_pt=_coerce_number(
+            caption_cfg.get("size_pt"), 8, "code_block.caption.size_pt"
+        ),
+        color=_coerce_color(
+            caption_cfg.get("color"), "808080", "code_block.caption.color"
+        ),
         italic=bool(caption_cfg.get("italic", True)),
     )
     # "next style" = Code Block, so Enter after a title continues code.
     # w:next must sit after w:basedOn (schema order), before pPr/rPr.
     tel = title_style.element
-    existing_next = tel.find(qn('w:next'))
+    existing_next = tel.find(qn("w:next"))
     if existing_next is not None:
         tel.remove(existing_next)
-    tnext = OxmlElement('w:next')
-    tnext.set(qn('w:val'), STYLE_CODE)
-    based = tel.find(qn('w:basedOn'))
+    tnext = OxmlElement("w:next")
+    tnext.set(qn("w:val"), STYLE_CODE)
+    based = tel.find(qn("w:basedOn"))
     if based is not None:
         based.addnext(tnext)
     else:
-        name_el = tel.find(qn('w:name'))
-        (name_el if name_el is not None else tel).addnext(tnext) \
-            if name_el is not None else tel.insert(0, tnext)
+        name_el = tel.find(qn("w:name"))
+        (name_el if name_el is not None else tel).addnext(
+            tnext
+        ) if name_el is not None else tel.insert(0, tnext)
     _mark_style_visible(title_style, priority=21)
 
     # 6. Inline-code character style (monospace font/size, optional color/fill).
     code_char_style = _define_char_style(
-        doc, STYLE_CODE_CHAR,
+        doc,
+        STYLE_CODE_CHAR,
         display_name=STYLE_DISPLAY_NAMES[STYLE_CODE_CHAR],
         font=sc.text("inline_code", "font", "Consolas"),
         size_pt=sc.num("inline_code", "size_pt", 10),
@@ -1174,7 +1317,8 @@ def _build_styles(doc, sc: "StyleConfig"):
 
     # 8. Hyperlink character style (color + underline from links.*).
     _define_char_style(
-        doc, STYLE_HYPERLINK,
+        doc,
+        STYLE_HYPERLINK,
         color=sc.color("links", "color", default="0563C1"),
         underline=sc.flag("links", "underline", True),
     )
@@ -1185,8 +1329,14 @@ def _build_styles(doc, sc: "StyleConfig"):
     _prune_gallery_styles(doc)
 
 
-def _apply_paragraph_format(paragraph, *, space_before_pt=None, space_after_pt=None,
-                            line_spacing=None, left_indent_in=None):
+def _apply_paragraph_format(
+    paragraph,
+    *,
+    space_before_pt=None,
+    space_after_pt=None,
+    line_spacing=None,
+    left_indent_in=None,
+):
     """Apply direct paragraph-format properties, skipping any left as ``None``."""
     pf = paragraph.paragraph_format
     if space_before_pt is not None:
@@ -1199,8 +1349,17 @@ def _apply_paragraph_format(paragraph, *, space_before_pt=None, space_after_pt=N
         pf.left_indent = Inches(left_indent_in)
 
 
-def _apply_run_format(run, *, font=None, size_pt=None, color=None, bold=None,
-                      italic=None, strike=None, fill=None):
+def _apply_run_format(
+    run,
+    *,
+    font=None,
+    size_pt=None,
+    color=None,
+    bold=None,
+    italic=None,
+    strike=None,
+    fill=None,
+):
     """Apply direct run/character formatting, skipping any left as ``None``.
 
     ``color`` and ``fill`` accept an ``RGBColor`` (or hex string); ``fill`` adds
@@ -1217,18 +1376,22 @@ def _apply_run_format(run, *, font=None, size_pt=None, color=None, bold=None,
     if strike is not None:
         run.font.strike = strike
     if color is not None:
-        run.font.color.rgb = color if isinstance(color, RGBColor) else RGBColor.from_string(str(color).upper())
+        run.font.color.rgb = (
+            color
+            if isinstance(color, RGBColor)
+            else RGBColor.from_string(str(color).upper())
+        )
     if fill is not None:
         hexfill = _as_hex(fill)
         if hexfill:
             rPr = run._r.get_or_add_rPr()
-            existing = rPr.find(qn('w:shd'))
+            existing = rPr.find(qn("w:shd"))
             if existing is not None:
                 rPr.remove(existing)
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'), 'clear')
-            shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), hexfill)
+            shd = OxmlElement("w:shd")
+            shd.set(qn("w:val"), "clear")
+            shd.set(qn("w:color"), "auto")
+            shd.set(qn("w:fill"), hexfill)
             rPr.append(shd)
 
 
@@ -1250,7 +1413,7 @@ def _content_width_emu(paragraph):
 # Remote-image fetch limits. Kept conservative so a slow or oversized response
 # can't stall or blow up a conversion. python-docx only accepts raster formats
 # (PNG/JPEG/GIF/BMP/TIFF); anything else falls back to alt text.
-REMOTE_IMAGE_TIMEOUT = 10          # seconds
+REMOTE_IMAGE_TIMEOUT = 10  # seconds
 REMOTE_IMAGE_MAX_BYTES = 10 * 1024 * 1024  # 10 MiB
 
 
@@ -1283,6 +1446,7 @@ def _add_image(paragraph, src: str, alt: str, base_dir=None, allow_remote=False)
     raising, so a bad image never aborts the conversion. Images wider than the
     content area are scaled down to fit while preserving aspect ratio.
     """
+
     def _fallback():
         paragraph.add_run(alt or "[image]")
 
@@ -1349,8 +1513,9 @@ def _unescape_sentinels(text: str) -> str:
     return re.sub(r"\x00ESC\x00(\d+)\x00", lambda m: chr(int(m.group(1))), text)
 
 
-def add_formatted_text(paragraph, text: str, anchors: dict = None, base_dir=None,
-                       allow_remote_images=False):
+def add_formatted_text(
+    paragraph, text: str, anchors: dict = None, base_dir=None, allow_remote_images=False
+):
     """Add text to a paragraph, handling **bold**, *italic*, `code`, links, and \\n line breaks.
 
     Link handling:
@@ -1366,6 +1531,7 @@ def add_formatted_text(paragraph, text: str, anchors: dict = None, base_dir=None
     # Hide backslash-escaped punctuation before any tokenization so escaped
     # markers (e.g. ``\*not italic\*``) cannot start a construct.
     text = _escape_punct(text)
+
     # Internal Obsidian heading links: [[#Heading]] or [[#Heading|alias]]
     def _obsidian_heading_link(m):
         target = m.group(1)
@@ -1373,24 +1539,46 @@ def add_formatted_text(paragraph, text: str, anchors: dict = None, base_dir=None
         # Placeholder token; resolved during segment rendering below
         return f"\x00LINK\x00{target}\x00{alias}\x00"
 
-    text = re.sub(r"\[\[#([^|\]]+)\|([^\]]+)\]\]", lambda m: f"\x00LINK\x00#{m.group(1)}\x00{m.group(2)}\x00", text)
-    text = re.sub(r"\[\[#([^\]]+)\]\]", lambda m: f"\x00LINK\x00#{m.group(1)}\x00{m.group(1)}\x00", text)
+    text = re.sub(
+        r"\[\[#([^|\]]+)\|([^\]]+)\]\]",
+        lambda m: f"\x00LINK\x00#{m.group(1)}\x00{m.group(2)}\x00",
+        text,
+    )
+    text = re.sub(
+        r"\[\[#([^\]]+)\]\]",
+        lambda m: f"\x00LINK\x00#{m.group(1)}\x00{m.group(1)}\x00",
+        text,
+    )
 
     # Images ![alt](src) -> IMG token. Done BEFORE links so the leading '!' is
     # consumed and the src/alt aren't mistaken for a plain link.
-    text = re.sub(r"!\[([^\]]*)\]\(([^)]+)\)",
-                  lambda m: f"\x00IMG\x00{m.group(2)}\x00{m.group(1)}\x00", text)
+    text = re.sub(
+        r"!\[([^\]]*)\]\(([^)]+)\)",
+        lambda m: f"\x00IMG\x00{m.group(2)}\x00{m.group(1)}\x00",
+        text,
+    )
 
     # Standard markdown links [text](target) -> placeholder token
-    text = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", lambda m: f"\x00LINK\x00{m.group(2)}\x00{m.group(1)}\x00", text)
+    text = re.sub(
+        r"\[([^\]]+)\]\(([^)]+)\)",
+        lambda m: f"\x00LINK\x00{m.group(2)}\x00{m.group(1)}\x00",
+        text,
+    )
 
     # Angle autolinks <https://...> / <mailto:...> -> LINK token (label == URL).
-    text = re.sub(r"<((?:https?://|mailto:)[^>\s]+)>",
-                  lambda m: f"\x00LINK\x00{m.group(1)}\x00{m.group(1)}\x00", text)
+    text = re.sub(
+        r"<((?:https?://|mailto:)[^>\s]+)>",
+        lambda m: f"\x00LINK\x00{m.group(1)}\x00{m.group(1)}\x00",
+        text,
+    )
 
     # Remaining (non-heading) wiki links: [[path/page]] -> page, [[page|alias]] -> alias
-    text = re.sub(r"\[\[([^|\]]+)\|([^\]]+)\]\]", r"\2", text)  # [[target|alias]] -> alias
-    text = re.sub(r"\[\[([^\]]+)\]\]", lambda m: m.group(1).split("/")[-1], text)  # [[path/page]] -> page
+    text = re.sub(
+        r"\[\[([^|\]]+)\|([^\]]+)\]\]", r"\2", text
+    )  # [[target|alias]] -> alias
+    text = re.sub(
+        r"\[\[([^\]]+)\]\]", lambda m: m.group(1).split("/")[-1], text
+    )  # [[path/page]] -> page
 
     # Split on newlines first to handle line breaks
     segments = text.split("\n")
@@ -1401,14 +1589,16 @@ def add_formatted_text(paragraph, text: str, anchors: dict = None, base_dir=None
 
         # Split out link/image placeholders so they aren't chopped by the emphasis regex
         link_parts = re.split(
-            r"((?:\x00LINK\x00|\x00IMG\x00)[^\x00]*\x00[^\x00]*\x00)", segment)
+            r"((?:\x00LINK\x00|\x00IMG\x00)[^\x00]*\x00[^\x00]*\x00)", segment
+        )
         for lp in link_parts:
             img_match = re.match(r"\x00IMG\x00([^\x00]*)\x00([^\x00]*)\x00", lp)
             if img_match:
                 src = _unescape_sentinels(img_match.group(1)).strip()
                 alt = _unescape_sentinels(img_match.group(2))
-                _add_image(paragraph, src, alt, base_dir,
-                           allow_remote=allow_remote_images)
+                _add_image(
+                    paragraph, src, alt, base_dir, allow_remote=allow_remote_images
+                )
                 continue
 
             link_match = re.match(r"\x00LINK\x00([^\x00]*)\x00([^\x00]*)\x00", lp)
@@ -1442,15 +1632,27 @@ def add_formatted_text(paragraph, text: str, anchors: dict = None, base_dir=None
 # emphasis has no such restriction (it may appear mid-word).
 _INLINE_PATTERNS = [
     (re.compile(r"\*\*\*(.+?)\*\*\*", re.DOTALL), ("bold", "italic"), True),
-    (re.compile(r"(?<![\w_])___(?!_)(.+?)(?<!_)___(?![\w_])", re.DOTALL), ("bold", "italic"), True),
+    (
+        re.compile(r"(?<![\w_])___(?!_)(.+?)(?<!_)___(?![\w_])", re.DOTALL),
+        ("bold", "italic"),
+        True,
+    ),
     (re.compile(r"\*\*(.+?)\*\*", re.DOTALL), ("bold",), True),
-    (re.compile(r"(?<![\w_])__(?!_)(.+?)(?<!_)__(?![\w_])", re.DOTALL), ("bold",), True),
+    (
+        re.compile(r"(?<![\w_])__(?!_)(.+?)(?<!_)__(?![\w_])", re.DOTALL),
+        ("bold",),
+        True,
+    ),
     (re.compile(r"`([^`]+)`", re.DOTALL), ("code",), False),
     # Strikethrough (GFM). Placed after code so a ``~~`` inside a code span stays
     # literal, mirroring how emphasis is ignored inside code.
     (re.compile(r"~~(.+?)~~", re.DOTALL), ("strike",), True),
     (re.compile(r"\*(.+?)\*", re.DOTALL), ("italic",), True),
-    (re.compile(r"(?<![\w_])_(?!_)(.+?)(?<!_)_(?![\w_])", re.DOTALL), ("italic",), True),
+    (
+        re.compile(r"(?<![\w_])_(?!_)(.+?)(?<!_)_(?![\w_])", re.DOTALL),
+        ("italic",),
+        True,
+    ),
 ]
 
 
@@ -1481,11 +1683,13 @@ def _style_run(run, flags):
         except (KeyError, Exception):
             # Fallback: stamp the code font directly if the style is missing.
             sc = _ACTIVE_STYLE
-            _apply_run_format(run,
-                              font=sc.text("inline_code", "font", "Consolas"),
-                              size_pt=sc.num("inline_code", "size_pt", 10),
-                              color=sc.color("inline_code", "color"),
-                              fill=sc.text("inline_code", "fill"))
+            _apply_run_format(
+                run,
+                font=sc.text("inline_code", "font", "Consolas"),
+                size_pt=sc.num("inline_code", "size_pt", 10),
+                color=sc.color("inline_code", "color"),
+                fill=sc.text("inline_code", "fill"),
+            )
 
 
 def _emit_run(paragraph, text, flags):
@@ -1513,8 +1717,8 @@ def _emit_run(paragraph, text, flags):
         url = m.group(0)
         # Trim trailing sentence punctuation off the URL, leaving it as text.
         trimmed = url.rstrip(_URL_TRAILING_PUNCT)
-        trailing = url[len(trimmed):]
-        before = text[pos:m.start()]
+        trailing = url[len(trimmed) :]
+        before = text[pos : m.start()]
         if before:
             _style_run(paragraph.add_run(before), flags)
         _add_external_hyperlink(paragraph, trimmed, trimmed)
@@ -1557,22 +1761,22 @@ def _render_inline(paragraph, text, flags=frozenset()):
         _emit_run(paragraph, inner, new_flags)
 
     # Continue with whatever follows the token.
-    _render_inline(paragraph, text[m.end():], flags)
+    _render_inline(paragraph, text[m.end() :], flags)
 
 
 def _make_element(tag, **attrs):
     """Create an OxmlElement with w: namespace attributes."""
     el = OxmlElement(tag)
     for k, v in attrs.items():
-        el.set(qn(f'w:{k}'), v)
+        el.set(qn(f"w:{k}"), v)
     return el
 
 
 # Blockquote left-bar styling. Matches the "Blockquote Example" in the template
 # (see create_template.py): a gray vertical bar on the left plus a hanging indent.
-BLOCKQUOTE_BAR_COLOR = '999999'   # medium gray vertical bar
-BLOCKQUOTE_BAR_SIZE = '18'        # border thickness in eighths of a point (~2.25pt)
-BLOCKQUOTE_BAR_SPACE = '12'       # space between bar and text, in points
+BLOCKQUOTE_BAR_COLOR = "999999"  # medium gray vertical bar
+BLOCKQUOTE_BAR_SIZE = "18"  # border thickness in eighths of a point (~2.25pt)
+BLOCKQUOTE_BAR_SPACE = "12"  # space between bar and text, in points
 
 
 def _build_blockquote_pBdr(color=BLOCKQUOTE_BAR_COLOR, width_pt=2.25, gap_pt=12):
@@ -1582,17 +1786,22 @@ def _build_blockquote_pBdr(color=BLOCKQUOTE_BAR_COLOR, width_pt=2.25, gap_pt=12)
     point ``sz`` unit); ``gap_pt`` is the space between bar and text in points.
     Shared by the ``MdQuote`` style generator and the direct-formatting helper.
     """
-    pBdr = OxmlElement('w:pBdr')
-    sz = str(max(1, int(round(width_pt * 8))))   # points -> eighths of a point
-    left = _make_element('w:left', val='single', sz=sz,
-                         space=str(int(round(gap_pt))),
-                         color=_as_hex(color) or "999999")
+    pBdr = OxmlElement("w:pBdr")
+    sz = str(max(1, int(round(width_pt * 8))))  # points -> eighths of a point
+    left = _make_element(
+        "w:left",
+        val="single",
+        sz=sz,
+        space=str(int(round(gap_pt))),
+        color=_as_hex(color) or "999999",
+    )
     pBdr.append(left)
     return pBdr
 
 
-def _apply_blockquote_bar(paragraph, color=BLOCKQUOTE_BAR_COLOR,
-                          width_pt=2.25, gap_pt=12):
+def _apply_blockquote_bar(
+    paragraph, color=BLOCKQUOTE_BAR_COLOR, width_pt=2.25, gap_pt=12
+):
     """Add a left vertical bar (paragraph border) to a blockquote paragraph.
 
     Applied as a direct border. Kept for callers that style a paragraph without
@@ -1600,7 +1809,7 @@ def _apply_blockquote_bar(paragraph, color=BLOCKQUOTE_BAR_COLOR,
     """
     pPr = paragraph._p.get_or_add_pPr()
     # Remove any existing borders so repeated calls stay idempotent.
-    existing = pPr.find(qn('w:pBdr'))
+    existing = pPr.find(qn("w:pBdr"))
     if existing is not None:
         pPr.remove(existing)
     pPr.append(_build_blockquote_pBdr(color=color, width_pt=width_pt, gap_pt=gap_pt))
@@ -1610,19 +1819,23 @@ def _apply_blockquote_bar(paragraph, color=BLOCKQUOTE_BAR_COLOR,
 # sides. The border's w:space attribute (in points) is what gives the code text
 # breathing room inside the shaded box — Word has no separate padding property
 # for shading, so a matching-color border is the standard way to fake it.
-CODE_BLOCK_FILL = 'F2F2F2'        # light gray background
-CODE_BLOCK_BORDER_SPACE = '6'     # padding between border and text, in points
+CODE_BLOCK_FILL = "F2F2F2"  # light gray background
+CODE_BLOCK_BORDER_SPACE = "6"  # padding between border and text, in points
 
 
-def _apply_code_block_box(paragraph, fill=CODE_BLOCK_FILL,
-                          space=CODE_BLOCK_BORDER_SPACE):
+def _apply_code_block_box(
+    paragraph, fill=CODE_BLOCK_FILL, space=CODE_BLOCK_BORDER_SPACE
+):
     """Give a code paragraph a shaded background with interior padding (direct).
 
     Kept as a direct-formatting utility; the normal render path now carries the
     box on the ``Code Block`` style instead. Delegates to the shared builder.
     """
-    _apply_code_box_to_pPr(paragraph._p.get_or_add_pPr(), fill,
-                           _coerce_number(space, 6, "code_block.padding_pt"))
+    _apply_code_box_to_pPr(
+        paragraph._p.get_or_add_pPr(),
+        fill,
+        _coerce_number(space, 6, "code_block.padding_pt"),
+    )
 
 
 def _split_table_row(line: str):
@@ -1642,7 +1855,7 @@ def _split_table_row(line: str):
         parts = parts[:-1]
     cells = []
     for c in parts:
-        c = c.replace("\\|", "|")            # literal pipe
+        c = c.replace("\\|", "|")  # literal pipe
         c = re.sub(r"<br\s*/?>", "\n", c, flags=re.IGNORECASE)  # in-cell break
         cells.append(c.strip())
     return cells
@@ -1681,7 +1894,19 @@ def _apply_custom_table_style(doc, table, sc: "StyleConfig"):
     border = sc.section("table").get("border", {}) or {}
     b_style = border.get("style", "single")
     b_color = _as_hex(border.get("color")) or "808080"
-    b_size = str(max(2, int(round(_coerce_number(border.get("width_pt"), 0.75, "table.border.width_pt") * 8))))
+    b_size = str(
+        max(
+            2,
+            int(
+                round(
+                    _coerce_number(
+                        border.get("width_pt"), 0.75, "table.border.width_pt"
+                    )
+                    * 8
+                )
+            ),
+        )
+    )
     # Which edges get a visible line; any others are explicitly turned off.
     enabled_edges = border.get("edges")
     if enabled_edges is None:
@@ -1689,61 +1914,84 @@ def _apply_custom_table_style(doc, table, sc: "StyleConfig"):
     enabled_edges = set(enabled_edges)
 
     margins = sc.section("table").get("cell_margins_pt", {}) or {}
+
     def _pt_to_dxa(v, d):
         return str(int(round(_coerce_number(v, d, "table.cell_margins_pt") * 20)))
 
     tbl = table._tbl
-    tblPr = tbl.find(qn('w:tblPr'))
+    tblPr = tbl.find(qn("w:tblPr"))
     if tblPr is None:
-        tblPr = OxmlElement('w:tblPr')
+        tblPr = OxmlElement("w:tblPr")
         tbl.insert(0, tblPr)
 
     # Draw only the enabled edges; disabled edges are set to 'nil' so no line
     # shows (this is how you get a horizontal-rules-only table).
-    existing_bdr = tblPr.find(qn('w:tblBorders'))
+    existing_bdr = tblPr.find(qn("w:tblBorders"))
     if existing_bdr is not None:
         tblPr.remove(existing_bdr)
-    tblBorders = OxmlElement('w:tblBorders')
-    for edge in ('top', 'left', 'bottom', 'right', 'insideH', 'insideV'):
+    tblBorders = OxmlElement("w:tblBorders")
+    for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
         if edge in enabled_edges:
-            tblBorders.append(_make_element(f'w:{edge}', val=b_style, sz=b_size,
-                                            space='0', color=b_color))
+            tblBorders.append(
+                _make_element(
+                    f"w:{edge}", val=b_style, sz=b_size, space="0", color=b_color
+                )
+            )
         else:
-            tblBorders.append(_make_element(f'w:{edge}', val='nil'))
+            tblBorders.append(_make_element(f"w:{edge}", val="nil"))
     tblPr.append(tblBorders)
 
     # tblLook: emphasize first row/column.
-    existing_look = tblPr.find(qn('w:tblLook'))
+    existing_look = tblPr.find(qn("w:tblLook"))
     if existing_look is not None:
         tblPr.remove(existing_look)
-    tblPr.append(_make_element('w:tblLook', val='04A0', firstRow='1', lastRow='0',
-                               firstColumn='1', lastColumn='0', noHBand='0', noVBand='1'))
+    tblPr.append(
+        _make_element(
+            "w:tblLook",
+            val="04A0",
+            firstRow="1",
+            lastRow="0",
+            firstColumn="1",
+            lastColumn="0",
+            noHBand="0",
+            noVBand="1",
+        )
+    )
 
     # Cell margins from config (points -> dxa).
-    existing_mar = tblPr.find(qn('w:tblCellMar'))
+    existing_mar = tblPr.find(qn("w:tblCellMar"))
     if existing_mar is not None:
         tblPr.remove(existing_mar)
-    tblCellMar = OxmlElement('w:tblCellMar')
-    tblCellMar.append(_make_element('w:top', w=_pt_to_dxa(margins.get("top"), 3.6), type='dxa'))
-    tblCellMar.append(_make_element('w:left', w=_pt_to_dxa(margins.get("left"), 5.4), type='dxa'))
-    tblCellMar.append(_make_element('w:bottom', w=_pt_to_dxa(margins.get("bottom"), 3.6), type='dxa'))
-    tblCellMar.append(_make_element('w:right', w=_pt_to_dxa(margins.get("right"), 5.4), type='dxa'))
+    tblCellMar = OxmlElement("w:tblCellMar")
+    tblCellMar.append(
+        _make_element("w:top", w=_pt_to_dxa(margins.get("top"), 3.6), type="dxa")
+    )
+    tblCellMar.append(
+        _make_element("w:left", w=_pt_to_dxa(margins.get("left"), 5.4), type="dxa")
+    )
+    tblCellMar.append(
+        _make_element("w:bottom", w=_pt_to_dxa(margins.get("bottom"), 3.6), type="dxa")
+    )
+    tblCellMar.append(
+        _make_element("w:right", w=_pt_to_dxa(margins.get("right"), 5.4), type="dxa")
+    )
     tblPr.append(tblCellMar)
 
     # Right-only inset: the table is narrowed on the right so it doesn't run the
     # full content width. For the LEFT edge, Word insets cell text from the table
     # border by the cell's left margin; a small positive tblInd equal to that
     # margin lines the table border up so cell text sits near the body margin.
-    indent_in = _coerce_number(sc.section("table").get("indent_in"), 0.0,
-                               "table.indent_in")
+    indent_in = _coerce_number(
+        sc.section("table").get("indent_in"), 0.0, "table.indent_in"
+    )
     cell_left_dxa = int(_pt_to_dxa(margins.get("left"), 5.4))
-    existing_ind = tblPr.find(qn('w:tblInd'))
+    existing_ind = tblPr.find(qn("w:tblInd"))
     if existing_ind is not None:
         tblPr.remove(existing_ind)
-    tblPr.append(_make_element('w:tblInd', w=str(cell_left_dxa), type='dxa'))
+    tblPr.append(_make_element("w:tblInd", w=str(cell_left_dxa), type="dxa"))
 
     # Width: full (100%) or auto.
-    existing_w = tblPr.find(qn('w:tblW'))
+    existing_w = tblPr.find(qn("w:tblW"))
     if existing_w is not None:
         tblPr.remove(existing_w)
     if sc.text("table", "width", "full") == "full":
@@ -1753,20 +2001,21 @@ def _apply_custom_table_style(doc, table, sc: "StyleConfig"):
         if indent_in > 0:
             try:
                 section = doc.sections[0]
-                content_in = (section.page_width - section.left_margin
-                              - section.right_margin) / 914400.0  # EMU -> in
+                content_in = (
+                    section.page_width - section.left_margin - section.right_margin
+                ) / 914400.0  # EMU -> in
                 if content_in > 0:
                     pct = max(0, int(round(5000 * (1 - indent_in / content_in))))
             except Exception:
                 pass
-        tblPr.append(_make_element('w:tblW', w=str(pct), type='pct'))
+        tblPr.append(_make_element("w:tblW", w=str(pct), type="pct"))
     else:
-        tblPr.append(_make_element('w:tblW', w='0', type='auto'))
+        tblPr.append(_make_element("w:tblW", w="0", type="auto"))
 
-    existing_layout = tblPr.find(qn('w:tblLayout'))
+    existing_layout = tblPr.find(qn("w:tblLayout"))
     if existing_layout is not None:
         tblPr.remove(existing_layout)
-    tblPr.append(_make_element('w:tblLayout', type='autofit'))
+    tblPr.append(_make_element("w:tblLayout", type="autofit"))
 
 
 def _apply_table_header(table, sc: "StyleConfig"):
@@ -1782,28 +2031,44 @@ def _apply_table_header(table, sc: "StyleConfig"):
     fill = _as_hex(header.get("fill"))
     ul_color = _as_hex(header.get("underline_color")) or "404040"
     ul_size = header.get("underline_width_pt")
-    ul_size = str(max(2, int(round(_coerce_number(ul_size, 1.0, "table.header.underline_width_pt") * 8)))) \
-        if ul_size is not None else None
+    ul_size = (
+        str(
+            max(
+                2,
+                int(
+                    round(
+                        _coerce_number(ul_size, 1.0, "table.header.underline_width_pt")
+                        * 8
+                    )
+                ),
+            )
+        )
+        if ul_size is not None
+        else None
+    )
 
     for cell in table.rows[0].cells:
         tcPr = cell._tc.get_or_add_tcPr()
         if fill:
-            existing = tcPr.find(qn('w:shd'))
+            existing = tcPr.find(qn("w:shd"))
             if existing is not None:
                 tcPr.remove(existing)
-            shd = OxmlElement('w:shd')
-            shd.set(qn('w:val'), 'clear')
-            shd.set(qn('w:color'), 'auto')
-            shd.set(qn('w:fill'), fill)
+            shd = OxmlElement("w:shd")
+            shd.set(qn("w:val"), "clear")
+            shd.set(qn("w:color"), "auto")
+            shd.set(qn("w:fill"), fill)
             tcPr.append(shd)
         # Per-cell bottom border = the header underline rule.
         if ul_size is not None:
-            existing_bdr = tcPr.find(qn('w:tcBorders'))
+            existing_bdr = tcPr.find(qn("w:tcBorders"))
             if existing_bdr is not None:
                 tcPr.remove(existing_bdr)
-            tcBorders = OxmlElement('w:tcBorders')
-            tcBorders.append(_make_element('w:bottom', val='single', sz=ul_size,
-                                           space='0', color=ul_color))
+            tcBorders = OxmlElement("w:tcBorders")
+            tcBorders.append(
+                _make_element(
+                    "w:bottom", val="single", sz=ul_size, space="0", color=ul_color
+                )
+            )
             tcPr.append(tcBorders)
         if make_bold:
             for para in cell.paragraphs:
@@ -1833,54 +2098,55 @@ def _fix_narrow_column_widths(table, available_twips=9360):
     # Calculate proportional widths based on content length
     # Use sqrt to dampen the ratio — prevents huge disparities
     import math
+
     col_weights = [math.sqrt(max(length, 1)) for length in col_max_len]
     total_weight = sum(col_weights)
 
     col_widths_twips = [int(available_twips * w / total_weight) for w in col_weights]
 
     # Set gridCol widths in tblGrid
-    tblGrid = tbl.find(qn('w:tblGrid'))
+    tblGrid = tbl.find(qn("w:tblGrid"))
     if tblGrid is not None:
-        gridCols = tblGrid.findall(qn('w:gridCol'))
+        gridCols = tblGrid.findall(qn("w:gridCol"))
         for c_idx, gridCol in enumerate(gridCols):
             if c_idx < num_cols:
-                gridCol.set(qn('w:w'), str(col_widths_twips[c_idx]))
+                gridCol.set(qn("w:w"), str(col_widths_twips[c_idx]))
 
     # Set cell widths to match
     for row in table.rows:
         for c_idx, cell in enumerate(row.cells):
             if c_idx < num_cols:
-                tcPr = cell._tc.find(qn('w:tcPr'))
+                tcPr = cell._tc.find(qn("w:tcPr"))
                 if tcPr is None:
-                    tcPr = OxmlElement('w:tcPr')
+                    tcPr = OxmlElement("w:tcPr")
                     cell._tc.insert(0, tcPr)
-                existing_tcW = tcPr.find(qn('w:tcW'))
+                existing_tcW = tcPr.find(qn("w:tcW"))
                 if existing_tcW is not None:
                     tcPr.remove(existing_tcW)
-                tcW = _make_element('w:tcW', w=str(col_widths_twips[c_idx]), type='dxa')
+                tcW = _make_element("w:tcW", w=str(col_widths_twips[c_idx]), type="dxa")
                 tcPr.append(tcW)
 
 
 def _new_num_id(doc, abstract_num_id):
     """Create a new num entry referencing the given abstractNumId. Returns the new numId.
-    
+
     Includes a level override to restart numbering at 1, which ensures
     each numbered list block starts fresh.
     """
     numbering_elm = doc.part.numbering_part._element
-    nums = numbering_elm.findall(qn('w:num'))
-    max_num_id = max((int(n.get(qn('w:numId'))) for n in nums), default=0)
+    nums = numbering_elm.findall(qn("w:num"))
+    max_num_id = max((int(n.get(qn("w:numId"))) for n in nums), default=0)
     new_num_id = max_num_id + 1
 
-    new_num = OxmlElement('w:num')
-    new_num.set(qn('w:numId'), str(new_num_id))
-    new_num.append(_make_element('w:abstractNumId', val=str(abstract_num_id)))
+    new_num = OxmlElement("w:num")
+    new_num.set(qn("w:numId"), str(new_num_id))
+    new_num.append(_make_element("w:abstractNumId", val=str(abstract_num_id)))
 
     # Add level override to force restart at 1
-    lvl_override = OxmlElement('w:lvlOverride')
-    lvl_override.set(qn('w:ilvl'), '0')
-    start_override = OxmlElement('w:startOverride')
-    start_override.set(qn('w:val'), '1')
+    lvl_override = OxmlElement("w:lvlOverride")
+    lvl_override.set(qn("w:ilvl"), "0")
+    start_override = OxmlElement("w:startOverride")
+    start_override.set(qn("w:val"), "1")
     lvl_override.append(start_override)
     new_num.append(lvl_override)
 
@@ -1891,9 +2157,9 @@ def _new_num_id(doc, abstract_num_id):
 def _set_list_numbering(paragraph, num_id: int, ilvl: int = 0):
     """Attach a ``w:numPr`` (numId + level) to a paragraph for list numbering."""
     pPr = paragraph._p.get_or_add_pPr()
-    numPr = OxmlElement('w:numPr')
-    numPr.append(_make_element('w:ilvl', val=str(ilvl)))
-    numPr.append(_make_element('w:numId', val=str(num_id)))
+    numPr = OxmlElement("w:numPr")
+    numPr.append(_make_element("w:ilvl", val=str(ilvl)))
+    numPr.append(_make_element("w:numId", val=str(num_id)))
     pPr.append(numPr)
 
 
@@ -1906,28 +2172,34 @@ def _get_numbering_element(doc):
     return doc.part.numbering_part._element
 
 
-def _make_list_level(ilvl: int, num_fmt: str, lvl_text: str, left_twips: int,
-                     hanging_twips: int = 360, font: str = None):
+def _make_list_level(
+    ilvl: int,
+    num_fmt: str,
+    lvl_text: str,
+    left_twips: int,
+    hanging_twips: int = 360,
+    font: str = None,
+):
     """Build a ``w:lvl`` element for an abstractNum (bullet or decimal)."""
-    lvl = OxmlElement('w:lvl')
-    lvl.set(qn('w:ilvl'), str(ilvl))
-    lvl.append(_make_element('w:start', val='1'))
-    lvl.append(_make_element('w:numFmt', val=num_fmt))
-    lvl.append(_make_element('w:lvlText', val=lvl_text))
-    lvl.append(_make_element('w:lvlJc', val='left'))
-    pPr = OxmlElement('w:pPr')
-    ind = OxmlElement('w:ind')
-    ind.set(qn('w:left'), str(left_twips))
-    ind.set(qn('w:hanging'), str(hanging_twips))
+    lvl = OxmlElement("w:lvl")
+    lvl.set(qn("w:ilvl"), str(ilvl))
+    lvl.append(_make_element("w:start", val="1"))
+    lvl.append(_make_element("w:numFmt", val=num_fmt))
+    lvl.append(_make_element("w:lvlText", val=lvl_text))
+    lvl.append(_make_element("w:lvlJc", val="left"))
+    pPr = OxmlElement("w:pPr")
+    ind = OxmlElement("w:ind")
+    ind.set(qn("w:left"), str(left_twips))
+    ind.set(qn("w:hanging"), str(hanging_twips))
     pPr.append(ind)
     lvl.append(pPr)
     if font:
-        rPr = OxmlElement('w:rPr')
-        rFonts = OxmlElement('w:rFonts')
-        rFonts.set(qn('w:ascii'), font)
-        rFonts.set(qn('w:hAnsi'), font)
-        rFonts.set(qn('w:cs'), font)
-        rFonts.set(qn('w:hint'), 'default')
+        rPr = OxmlElement("w:rPr")
+        rFonts = OxmlElement("w:rFonts")
+        rFonts.set(qn("w:ascii"), font)
+        rFonts.set(qn("w:hAnsi"), font)
+        rFonts.set(qn("w:cs"), font)
+        rFonts.set(qn("w:hint"), "default")
         rPr.append(rFonts)
         lvl.append(rPr)
     return lvl
@@ -1946,13 +2218,15 @@ def _ensure_numbering(doc, sc: "StyleConfig"):
     come from ``lists.*``. Idempotent: only injects if not already present.
     """
     numbering_elm = _get_numbering_element(doc)
-    existing_ids = {int(a.get(qn('w:abstractNumId')))
-                    for a in numbering_elm.findall(qn('w:abstractNum'))}
+    existing_ids = {
+        int(a.get(qn("w:abstractNumId")))
+        for a in numbering_elm.findall(qn("w:abstractNum"))
+    }
 
     bullet = sc.section("lists").get("bullet", {}) or {}
     # Per-level glyphs and their fonts. Each glyph must live in its paired font
     # (e.g. U+F0B7 exists in Symbol, but U+2022 does not).
-    glyphs = bullet.get("glyphs") or ["\uF0B7", "o"]
+    glyphs = bullet.get("glyphs") or ["\uf0b7", "o"]
     # Backward compat: an older single "bullet_font" applies to every level.
     if bullet.get("glyph_fonts"):
         glyph_fonts = bullet["glyph_fonts"]
@@ -1970,25 +2244,43 @@ def _ensure_numbering(doc, sc: "StyleConfig"):
         return glyphs[i] if i < len(glyphs) else fallback
 
     def _gfont(i):
-        return glyph_fonts[i] if i < len(glyph_fonts) else (glyph_fonts[-1] if glyph_fonts else "Symbol")
+        return (
+            glyph_fonts[i]
+            if i < len(glyph_fonts)
+            else (glyph_fonts[-1] if glyph_fonts else "Symbol")
+        )
 
     def _bindent(i, fallback):
         return b_indents[i] if i < len(b_indents) else fallback
 
     if _ABSTRACT_BULLET not in existing_ids:
-        abn = OxmlElement('w:abstractNum')
-        abn.set(qn('w:abstractNumId'), str(_ABSTRACT_BULLET))
-        abn.append(_make_list_level(0, 'bullet', _glyph(0, "\uF0B7"),
-                                    _in_to_twips(_bindent(0, 0.25)), font=_gfont(0)))
-        abn.append(_make_list_level(1, 'bullet', _glyph(1, "o"),
-                                    _in_to_twips(_bindent(1, 0.5)), font=_gfont(1)))
+        abn = OxmlElement("w:abstractNum")
+        abn.set(qn("w:abstractNumId"), str(_ABSTRACT_BULLET))
+        abn.append(
+            _make_list_level(
+                0,
+                "bullet",
+                _glyph(0, "\uf0b7"),
+                _in_to_twips(_bindent(0, 0.25)),
+                font=_gfont(0),
+            )
+        )
+        abn.append(
+            _make_list_level(
+                1,
+                "bullet",
+                _glyph(1, "o"),
+                _in_to_twips(_bindent(1, 0.5)),
+                font=_gfont(1),
+            )
+        )
         # abstractNum must precede num elements; insert at the front.
         numbering_elm.insert(0, abn)
 
     if _ABSTRACT_ORDERED not in existing_ids:
-        abn = OxmlElement('w:abstractNum')
-        abn.set(qn('w:abstractNumId'), str(_ABSTRACT_ORDERED))
-        abn.append(_make_list_level(0, 'decimal', '%1.', _in_to_twips(o_indent)))
+        abn = OxmlElement("w:abstractNum")
+        abn.set(qn("w:abstractNumId"), str(_ABSTRACT_ORDERED))
+        abn.append(_make_list_level(0, "decimal", "%1.", _in_to_twips(o_indent)))
         numbering_elm.insert(0, abn)
 
     return _ABSTRACT_BULLET, _ABSTRACT_ORDERED
@@ -2009,14 +2301,14 @@ def _add_bookmark(paragraph, name: str):
     Normal. Placing the bookmark after pPr keeps the paragraph well-formed."""
     _bookmark_id_counter[0] += 1
     bm_id = str(_bookmark_id_counter[0])
-    start = OxmlElement('w:bookmarkStart')
-    start.set(qn('w:id'), bm_id)
-    start.set(qn('w:name'), name)
-    end = OxmlElement('w:bookmarkEnd')
-    end.set(qn('w:id'), bm_id)
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), bm_id)
+    start.set(qn("w:name"), name)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), bm_id)
     p = paragraph._p
     # Insert bookmarkStart directly after <w:pPr> if present, else at the start.
-    pPr = p.find(qn('w:pPr'))
+    pPr = p.find(qn("w:pPr"))
     if pPr is not None:
         pPr.addnext(start)
     else:
@@ -2031,10 +2323,10 @@ def _set_outline_level(paragraph, level: int):
     directly. This keeps the document navigable and preserves PDF bookmarks.
     """
     pPr = paragraph._p.get_or_add_pPr()
-    existing = pPr.find(qn('w:outlineLvl'))
+    existing = pPr.find(qn("w:outlineLvl"))
     if existing is not None:
         pPr.remove(existing)
-    pPr.append(_make_element('w:outlineLvl', val=str(level - 1)))
+    pPr.append(_make_element("w:outlineLvl", val=str(level - 1)))
 
 
 def _add_heading(doc, text: str, level: int, sc: "StyleConfig"):
@@ -2049,8 +2341,16 @@ def _add_heading(doc, text: str, level: int, sc: "StyleConfig"):
     return p
 
 
-def build_docx(blocks: list, output_path: str, title=None, author=None, date=None,
-               base_dir=None, allow_remote_images=False, style=None):
+def build_docx(
+    blocks: list,
+    output_path: str,
+    title=None,
+    author=None,
+    date=None,
+    base_dir=None,
+    allow_remote_images=False,
+    style=None,
+):
     """Build the DOCX from parsed blocks, applying named styles from ``style``.
 
     ``title``, ``author``, and ``date`` are optional document metadata written to
@@ -2099,10 +2399,16 @@ def build_docx(blocks: list, output_path: str, title=None, author=None, date=Non
             if sc.flag("hr", "rule", True):
                 sz = str(max(1, int(round(sc.num("hr", "width_pt", 0.75) * 8))))
                 pPr = p._p.get_or_add_pPr()
-                pBdr = OxmlElement('w:pBdr')
-                pBdr.append(_make_element('w:bottom', val='single', sz=sz,
-                                          space='1',
-                                          color=_as_hex(sc.text("hr", "color", "BFBFBF")) or "BFBFBF"))
+                pBdr = OxmlElement("w:pBdr")
+                pBdr.append(
+                    _make_element(
+                        "w:bottom",
+                        val="single",
+                        sz=sz,
+                        space="1",
+                        color=_as_hex(sc.text("hr", "color", "BFBFBF")) or "BFBFBF",
+                    )
+                )
                 pPr.append(pBdr)
 
         elif block["type"] == "meta":
@@ -2112,8 +2418,13 @@ def build_docx(blocks: list, output_path: str, title=None, author=None, date=Non
             for meta_line in block["lines"]:
                 if not first:
                     p.add_run("\n")
-                add_formatted_text(p, meta_line, anchors, base_dir=base_dir,
-                                   allow_remote_images=allow_remote_images)
+                add_formatted_text(
+                    p,
+                    meta_line,
+                    anchors,
+                    base_dir=base_dir,
+                    allow_remote_images=allow_remote_images,
+                )
                 first = False
 
         elif block["type"] == "blockquote":
@@ -2126,8 +2437,13 @@ def build_docx(blocks: list, output_path: str, title=None, author=None, date=Non
                 for pl in para_lines:
                     if not first:
                         p.add_run("\n")
-                    add_formatted_text(p, pl, anchors, base_dir=base_dir,
-                                   allow_remote_images=allow_remote_images)
+                    add_formatted_text(
+                        p,
+                        pl,
+                        anchors,
+                        base_dir=base_dir,
+                        allow_remote_images=allow_remote_images,
+                    )
                     first = False
 
             current_para_lines = []
@@ -2186,26 +2502,42 @@ def build_docx(blocks: list, output_path: str, title=None, author=None, date=Non
                             # Tight paragraph spacing inside cells so the row
                             # height is controlled by cell margins, not the
                             # body paragraph's space_before/after.
-                            _apply_paragraph_format(para, space_before_pt=0,
-                                                    space_after_pt=0)
+                            _apply_paragraph_format(
+                                para, space_before_pt=0, space_after_pt=0
+                            )
                             # Per-column alignment from the separator row.
                             align = col_align[c_idx] if c_idx < len(col_align) else None
                             if align is not None:
                                 para.alignment = align
-                            add_formatted_text(para, cell, anchors, base_dir=base_dir,
-                                   allow_remote_images=allow_remote_images)
+                            add_formatted_text(
+                                para,
+                                cell,
+                                anchors,
+                                base_dir=base_dir,
+                                allow_remote_images=allow_remote_images,
+                            )
                 # Emphasize the header row, then size columns to content.
                 _apply_table_header(table, sc)
                 # Columns must sum to the content width minus the table indent.
                 try:
                     section = doc.sections[0]
-                    content_twips = int((section.page_width - section.left_margin
-                                         - section.right_margin) / 914400.0 * 1440)
+                    content_twips = int(
+                        (
+                            section.page_width
+                            - section.left_margin
+                            - section.right_margin
+                        )
+                        / 914400.0
+                        * 1440
+                    )
                 except Exception:
                     content_twips = 9360
                 table_indent_in = _coerce_number(
-                    sc.section("table").get("indent_in"), 0.0, "table.indent_in")
-                avail_twips = max(1440, content_twips - int(round(table_indent_in * 1440)))
+                    sc.section("table").get("indent_in"), 0.0, "table.indent_in"
+                )
+                avail_twips = max(
+                    1440, content_twips - int(round(table_indent_in * 1440))
+                )
                 _fix_narrow_column_widths(table, available_twips=avail_twips)
                 # Add a small spacer paragraph after the table
                 spacer = doc.add_paragraph()
@@ -2216,15 +2548,22 @@ def build_docx(blocks: list, output_path: str, title=None, author=None, date=Non
 
         elif block["type"] == "paragraph":
             p = doc.add_paragraph()  # uses Normal style (body font/spacing)
-            add_formatted_text(p, block["text"], anchors, base_dir=base_dir,
-                                   allow_remote_images=allow_remote_images)
+            add_formatted_text(
+                p,
+                block["text"],
+                anchors,
+                base_dir=base_dir,
+                allow_remote_images=allow_remote_images,
+            )
 
         elif block["type"] == "list":
             # Create a new numId for this bullet list block
             list_num_id = _new_num_id(doc, bullet_abstract)
             bullet_after = _coerce_number(
                 sc.section("lists").get("bullet", {}).get("space_after_pt"),
-                2, "lists.bullet.space_after_pt")
+                2,
+                "lists.bullet.space_after_pt",
+            )
             for item in block["items"]:
                 # Items are dicts: {"text": str, "checked": Optional[bool]}.
                 # checked is None for a normal bullet, True/False for a task item.
@@ -2237,26 +2576,40 @@ def build_docx(blocks: list, output_path: str, title=None, author=None, date=Non
                 # The font inherits from the document default via Normal style.
                 if checked is not None:
                     p.add_run("\u2611 " if checked else "\u2610 ")
-                add_formatted_text(p, item_text, anchors, base_dir=base_dir,
-                                   allow_remote_images=allow_remote_images)
+                add_formatted_text(
+                    p,
+                    item_text,
+                    anchors,
+                    base_dir=base_dir,
+                    allow_remote_images=allow_remote_images,
+                )
 
         elif block["type"] == "numbered_list":
             # Create a new numId for this numbered list block (ensures restart)
             list_num_id = _new_num_id(doc, numbered_abstract)
             ordered_after = _coerce_number(
                 sc.section("lists").get("ordered", {}).get("space_after_pt"),
-                2, "lists.ordered.space_after_pt")
+                2,
+                "lists.ordered.space_after_pt",
+            )
             bullet_after = _coerce_number(
                 sc.section("lists").get("bullet", {}).get("space_after_pt"),
-                2, "lists.bullet.space_after_pt")
+                2,
+                "lists.bullet.space_after_pt",
+            )
             for item in block["items"]:
                 item_text = item["text"] if isinstance(item, dict) else item
                 sub_items = item.get("sub_items", []) if isinstance(item, dict) else []
                 p = doc.add_paragraph()
                 _apply_paragraph_format(p, space_after_pt=ordered_after)
                 _set_list_numbering(p, list_num_id, ilvl=0)
-                add_formatted_text(p, item_text, anchors, base_dir=base_dir,
-                                   allow_remote_images=allow_remote_images)
+                add_formatted_text(
+                    p,
+                    item_text,
+                    anchors,
+                    base_dir=base_dir,
+                    allow_remote_images=allow_remote_images,
+                )
                 # Render sub-items as indented bullets (level 1 of the bullet list).
                 if sub_items:
                     sub_num_id = _new_num_id(doc, bullet2_abstract)
@@ -2264,8 +2617,13 @@ def build_docx(blocks: list, output_path: str, title=None, author=None, date=Non
                         sp = doc.add_paragraph()
                         _apply_paragraph_format(sp, space_after_pt=bullet_after)
                         _set_list_numbering(sp, sub_num_id, ilvl=1)
-                        add_formatted_text(sp, sub, anchors, base_dir=base_dir,
-                                   allow_remote_images=allow_remote_images)
+                        add_formatted_text(
+                            sp,
+                            sub,
+                            anchors,
+                            base_dir=base_dir,
+                            allow_remote_images=allow_remote_images,
+                        )
 
     # Write optional document metadata to the file's core properties.
     cp = doc.core_properties
@@ -2307,8 +2665,10 @@ def check_output_writable(output_path: str):
     # 1. Word owner/lock file: ~$<filename> in the same directory.
     lock_file = out.parent / f"~${out.name}"
     if lock_file.exists():
-        print(f"ERROR: '{out.name}' appears to be open in Word "
-              f"(found lock file '{lock_file.name}').")
+        print(
+            f"ERROR: '{out.name}' appears to be open in Word "
+            f"(found lock file '{lock_file.name}')."
+        )
         print("       Close the document in Word and run the conversion again.")
         sys.exit(1)
 
@@ -2319,8 +2679,10 @@ def check_output_writable(output_path: str):
             with open(out, "a"):
                 pass
         except PermissionError:
-            print(f"ERROR: cannot write to '{out.name}' — the file is locked, "
-                  f"likely open in Word or another program.")
+            print(
+                f"ERROR: cannot write to '{out.name}' — the file is locked, "
+                f"likely open in Word or another program."
+            )
             print("       Close the document and run the conversion again.")
             sys.exit(1)
 
