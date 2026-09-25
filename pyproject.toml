@@ -46,6 +46,7 @@ include = [
     "src/md_to_docx",
     "tests",
     "README.md",
+    "CHANGELOG.md",
     "pyproject.toml",
 ]
 

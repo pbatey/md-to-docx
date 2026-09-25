@@ -187,3 +187,7 @@ are needed — the default styling is baked into the script.
 ```sh
 uv run pytest
 ```
+
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes and notable changes.
