@@ -91,6 +91,12 @@ def test_bold_spanning_numbered_wrap_renders(tmp_path):
     assert any(r.bold and "Doc Repo" in r.text for r in p.runs)
 
 
+def test_bold_spanning_blockquote_wrap_renders(tmp_path):
+    doc = _render_para("> stored in the **Doc\n> Repo** now", tmp_path)
+    p = next(p for p in doc.paragraphs if "Doc Repo" in p.text)
+    assert any(r.bold and "Doc Repo" in r.text for r in p.runs)
+
+
 def test_parse_blockquote_preserves_lines():
     md = "> line one\n> line two"
     blocks = parse_markdown(md)

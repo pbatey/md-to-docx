@@ -2433,18 +2433,28 @@ def build_docx(
             # empty lines.
             def _emit_quote(para_lines):
                 p = doc.add_paragraph(style=STYLE_DISPLAY_NAMES[STYLE_QUOTE])
-                first = True
-                for pl in para_lines:
-                    if not first:
-                        p.add_run("\n")
-                    add_formatted_text(
-                        p,
-                        pl,
-                        anchors,
-                        base_dir=base_dir,
-                        allow_remote_images=allow_remote_images,
-                    )
-                    first = False
+                # Join soft-wrapped lines into one string before formatting so
+                # inline spans (e.g. **bold**) that cross a wrap still pair up.
+                # A soft wrap becomes a space; a trailing double-space is a hard
+                # line break (\n), which add_formatted_text renders as a break.
+                joined = ""
+                prev_had_break = False
+                for idx, pl in enumerate(para_lines):
+                    if idx > 0 and not prev_had_break:
+                        joined += " "
+                    if pl.endswith("  "):
+                        joined += pl.rstrip() + "\n"
+                        prev_had_break = True
+                    else:
+                        joined += pl
+                        prev_had_break = False
+                add_formatted_text(
+                    p,
+                    joined,
+                    anchors,
+                    base_dir=base_dir,
+                    allow_remote_images=allow_remote_images,
+                )
 
             current_para_lines = []
             for line in block["lines"]:

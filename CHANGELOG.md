@@ -28,6 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `--dump-config` no longer crashes on non-UTF-8 consoles (e.g. Windows
   `cp1252`); it now writes UTF-8 output directly.
+- Bold/emphasis that spans a soft-wrapped line inside a blockquote now renders
+  correctly (previously the markers were split across lines and left as literal
+  text).
 
 ## [0.2.0]
 
