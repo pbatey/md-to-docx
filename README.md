@@ -13,8 +13,10 @@ normal Word document.
 - Paragraphs with hard-wrap preservation (two trailing spaces = line break)
 - Bold, italic, bold-italic, inline code, and strikethrough (`~~text~~`)
 - Backslash escapes (`\*`, `` \` ``, `\~`, `\[`, ...) render punctuation literally
-- Bullet lists, numbered lists (with one level of sub-bullets), and GFM task
-  lists (`- [ ]` / `- [x]`, rendered with checkbox glyphs)
+- Bullet and numbered lists with arbitrary nesting (up to five levels),
+  including mixed ordered/unordered nesting; nesting is normalized by
+  indentation order, so irregular hand-authored indentation still nests
+  sensibly. GFM task lists (`- [ ]` / `- [x]`) render with checkbox glyphs.
 - Fenced code blocks, including the language info string (```` ```python ````)
 - Tables (pipe-delimited with a leading `|` on each row), with per-column
   alignment from the separator row (`:---` left, `:---:` center, `---:` right),
@@ -30,9 +32,8 @@ normal Word document.
   `[[#Heading]]` wiki-links, bare URLs, and `<https://...>` autolinks
 - Clickable internal table-of-contents links via heading bookmarks
 
-Not supported: nested lists beyond one level, reference-style links, footnotes,
-setext headings, indented code blocks, raw HTML, nested blockquotes, and
-pipe-less tables.
+Not supported: reference-style links, footnotes, setext headings, indented code
+blocks, raw HTML, nested blockquotes, and pipe-less tables.
 
 ## Install
 

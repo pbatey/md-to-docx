@@ -79,6 +79,72 @@ def test_numbered_continuation_joined_with_space():
     assert blocks[0]["items"][0]["text"] == "the **Doc Repo** value"
 
 
+# --------------------------------------------------------------------------- #
+# Nested lists (multi-level, mixed ordered/unordered, irregular indentation)
+# --------------------------------------------------------------------------- #
+def test_parse_nested_bullets_three_levels():
+    md = "- a\n  - b\n    - c"
+    items = parse_markdown(md)[0]["items"]
+    assert items[0]["text"] == "a"
+    assert items[0]["children"][0]["text"] == "b"
+    assert items[0]["children"][0]["children"][0]["text"] == "c"
+
+
+def test_parse_mixed_ordered_under_bullet():
+    md = "- top\n  1. first\n  2. second"
+    items = parse_markdown(md)[0]["items"]
+    assert items[0]["text"] == "top" and items[0]["ordered"] is False
+    children = items[0]["children"]
+    assert [c["text"] for c in children] == ["first", "second"]
+    assert all(c["ordered"] for c in children)
+
+
+def test_parse_irregular_indentation_normalizes_by_order():
+    # Mirrors the user's example: a top bullet, deeper children, then a less-
+    # indented sibling that still sits one level under the top. All four land at
+    # the same nesting level under the top item.
+    md = "- top item\n    - deep A\n    - deep B\n  - plan of record\n"
+    items = parse_markdown(md)[0]["items"]
+    assert len(items) == 1
+    kids = items[0]["children"]
+    assert [k["text"] for k in kids] == ["deep A", "deep B", "plan of record"]
+    assert all(not k["children"] for k in kids)
+
+
+def test_parse_nested_soft_wrap_joins_in_child():
+    md = "- top\n  - child with **Doc\n    Repo** inside"
+    child = parse_markdown(md)[0]["items"][0]["children"][0]
+    assert child["text"] == "child with **Doc Repo** inside"
+
+
+def test_render_nested_bullets_emit_increasing_ilvl(tmp_path):
+    from docx.oxml.ns import qn
+
+    doc = _render_para("- a\n  - b\n    - c", tmp_path)
+    ilvls = [e.get(qn("w:val")) for e in doc.element.body.iter(qn("w:ilvl"))]
+    assert "0" in ilvls and "1" in ilvls and "2" in ilvls
+
+
+def test_render_mixed_nesting_uses_separate_numbering(tmp_path):
+    from docx.oxml.ns import qn
+
+    # A bullet with nested ordered children: the ordered children should use a
+    # different numId than the bullets so Word numbers them as a decimal list.
+    doc = _render_para("- top\n  1. one\n  2. two", tmp_path)
+    num_ids = set()
+    for numpr in doc.element.body.iter(qn("w:numPr")):
+        nid = numpr.find(qn("w:numId"))
+        if nid is not None:
+            num_ids.add(nid.get(qn("w:val")))
+    assert len(num_ids) >= 2  # distinct bullet + ordered numbering definitions
+
+
+def test_bold_spanning_nested_bullet_wrap_renders(tmp_path):
+    doc = _render_para("- top\n  - deep **Doc\n    Repo** here", tmp_path)
+    p = next(p for p in doc.paragraphs if "Doc Repo" in p.text)
+    assert any(r.bold and "Doc Repo" in r.text for r in p.runs)
+
+
 def test_bold_spanning_bullet_wrap_renders(tmp_path):
     doc = _render_para("- stored in the **Doc\n  Repo** now", tmp_path)
     p = next(p for p in doc.paragraphs if "Doc Repo" in p.text)
@@ -369,9 +435,9 @@ def test_code_block_has_padded_shaded_box(tmp_path):
 def test_parse_task_items():
     blocks = parse_markdown("- [ ] todo\n- [x] done\n- normal")
     items = blocks[0]["items"]
-    assert items[0] == {"text": "todo", "checked": False}
-    assert items[1] == {"text": "done", "checked": True}
-    assert items[2] == {"text": "normal", "checked": None}
+    assert (items[0]["text"], items[0]["checked"]) == ("todo", False)
+    assert (items[1]["text"], items[1]["checked"]) == ("done", True)
+    assert (items[2]["text"], items[2]["checked"]) == ("normal", None)
 
 
 def test_task_items_render_glyphs(tmp_path):

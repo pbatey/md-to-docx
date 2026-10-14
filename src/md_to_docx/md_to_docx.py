@@ -449,6 +449,127 @@ def build_heading_anchors(blocks: list) -> dict:
     return anchors
 
 
+_LIST_ITEM_RE = re.compile(r"^(\s*)(-|\d+\.)\s+(.*)$")
+
+
+def _list_marker(line: str):
+    """Return ``(indent_cols, ordered, text)`` if ``line`` starts a list item.
+
+    ``indent_cols`` is the leading-whitespace width, ``ordered`` is True for a
+    numbered marker (``1.``) and False for a bullet (``-``). Returns ``None`` for
+    non-item lines.
+    """
+    m = _LIST_ITEM_RE.match(line)
+    if not m:
+        return None
+    indent = len(m.group(1))
+    ordered = m.group(2) != "-"
+    return indent, ordered, m.group(3)
+
+
+def _parse_list(lines: list, i: int):
+    """Parse one contiguous list region into a nested block.
+
+    Produces a block ``{"type": "list" | "numbered_list", "items": [...]}`` where
+    each item is a node::
+
+        {"text": str, "ordered": bool, "checked": Optional[bool],
+         "children": [node, ...], "sub_items": [str, ...]}
+
+    Nesting is normalized by indentation *order* (CommonMark-style): a line
+    indented more than its parent becomes a child; a line indented less pops back
+    to the nearest ancestor whose indent is less than or equal to it. Raw column
+    counts don't need to be regular, which tolerates irregular hand-authored
+    indentation. ``sub_items`` is a convenience mirror of direct unordered-child
+    texts, kept for backward compatibility.
+    """
+    # 1. Collect flat item tokens with their indent, marker kind, and joined text
+    #    (soft-wrapped continuation lines merge into the owning item's text).
+    tokens = []  # list of dicts: {indent, ordered, text, checked}
+    top_ordered = _list_marker(lines[i])[1]
+
+    def _append_continuation(tok, raw):
+        # Soft wrap joins with a space (so inline emphasis spanning the wrap still
+        # pairs); a trailing double-space forces a hard line break.
+        piece = raw.strip()
+        if tok["text"].endswith("  "):
+            tok["text"] = tok["text"].rstrip() + "\n" + piece
+        else:
+            tok["text"] = tok["text"].rstrip("\n") + " " + piece
+
+    while i < len(lines):
+        marker = _list_marker(lines[i])
+        if marker is not None:
+            indent, ordered, raw_text = marker
+            # Task-list checkbox prefix (- [ ] / - [x]); only meaningful for bullets.
+            checked = None
+            task = re.match(r"\[([ xX])\]\s+(.*)", raw_text)
+            if task:
+                checked = task.group(1).lower() == "x"
+                raw_text = task.group(2)
+            tokens.append(
+                {
+                    "indent": indent,
+                    "ordered": ordered,
+                    "text": raw_text.strip(),
+                    "checked": checked,
+                }
+            )
+            i += 1
+            continue
+
+        stripped = lines[i].strip()
+        if stripped == "":
+            # A blank line is tolerated only if another item follows (loose list);
+            # otherwise it ends the region.
+            peek = i + 1
+            while peek < len(lines) and lines[peek].strip() == "":
+                peek += 1
+            if peek < len(lines) and _list_marker(lines[peek]) is not None:
+                i = peek
+                continue
+            break
+
+        # Indented non-item line → continuation of the most recent item.
+        if tokens and (len(lines[i]) - len(lines[i].lstrip())) >= 1:
+            _append_continuation(tokens[-1], lines[i])
+            i += 1
+            continue
+
+        # A non-indented, non-item line ends the list.
+        break
+
+    # 2. Build the nested tree via an indent stack. Each stack frame tracks the
+    #    indent column that opened a level and the node list at that level.
+    root = []
+    # stack entries: (indent_col, children_list_to_append_into)
+    stack = [(-1, root)]
+    for tok in tokens:
+        node = {
+            "text": tok["text"],
+            "ordered": tok["ordered"],
+            "checked": tok["checked"],
+            "children": [],
+        }
+        # Pop until the top of stack is a strict ancestor (its indent < this one).
+        while len(stack) > 1 and tok["indent"] <= stack[-1][0]:
+            stack.pop()
+        stack[-1][1].append(node)
+        # This node opens a new potential nesting level for deeper items.
+        stack.append((tok["indent"], node["children"]))
+
+    # 3. Backward-compat mirror: direct unordered children's texts as sub_items.
+    def _add_sub_items(nodes):
+        for n in nodes:
+            n["sub_items"] = [c["text"] for c in n["children"] if not c["ordered"]]
+            _add_sub_items(n["children"])
+
+    _add_sub_items(root)
+
+    block_type = "numbered_list" if top_ordered else "list"
+    return {"type": block_type, "items": root}, i
+
+
 def parse_markdown(text: str) -> list:
     """Parse markdown into a list of blocks with type and content."""
     blocks = []
@@ -530,96 +651,14 @@ def parse_markdown(text: str) -> list:
             blocks.append({"type": "meta", "lines": meta_lines})
             continue
 
-        # Bullet list items (including GFM task items: - [ ] / - [x])
-        elif line.startswith("- "):
-            list_items = []
-            while i < len(lines):
-                if lines[i].startswith("- "):
-                    # Start of a bullet item — collect it plus continuation lines
-                    item_text = lines[i][2:].strip()
-                    # Detect a task-list checkbox prefix.
-                    task_match = re.match(r"\[([ xX])\]\s+(.*)", item_text)
-                    if task_match:
-                        checked = task_match.group(1).lower() == "x"
-                        item_text = task_match.group(2)
-                    else:
-                        checked = None  # not a task item
-                    i += 1
-                    # Collect continuation lines (indented, not a new bullet or block element)
-                    while i < len(lines):
-                        next_line = lines[i]
-                        # Indented continuation (2+ spaces, not a new bullet)
-                        if re.match(
-                            r"^\s{2,}\S", next_line
-                        ) and not next_line.strip().startswith("- "):
-                            # A soft-wrapped line joins with a space (so inline
-                            # emphasis spanning the wrap still pairs up); only a
-                            # trailing double-space forces a hard line break.
-                            if item_text.endswith("  "):
-                                item_text = (
-                                    item_text.rstrip() + "\n" + next_line.strip()
-                                )
-                            else:
-                                item_text = (
-                                    item_text.rstrip("\n") + " " + next_line.strip()
-                                )
-                            i += 1
-                        else:
-                            break
-                    list_items.append({"text": item_text, "checked": checked})
-                else:
-                    break
-            blocks.append({"type": "list", "items": list_items})
-            continue
-
-        # Numbered list items (1. , 2. , etc.)
-        elif re.match(r"^\d+\.\s", line):
-            list_items = []
-            while i < len(lines):
-                if re.match(r"^\d+\.\s", lines[i]):
-                    # Start of a numbered item — collect it plus any continuation/sub-items
-                    item_text = re.sub(r"^\d+\.\s", "", lines[i]).strip()
-                    sub_items = []
-                    i += 1
-                    # Collect continuation lines (indented, not a new numbered item or block)
-                    while i < len(lines):
-                        next_line = lines[i]
-                        # Indented sub-bullet (e.g., "   - something")
-                        if re.match(r"^\s{2,}- ", next_line):
-                            sub_items.append(next_line.strip()[2:])  # strip "- " prefix
-                            i += 1
-                        # Indented continuation text (e.g., "   OR no match found")
-                        elif re.match(r"^\s{2,}\S", next_line) and not re.match(
-                            r"^\d+\.\s", next_line
-                        ):
-                            # Soft wrap joins with a space so inline emphasis
-                            # spanning the wrap still pairs; a trailing
-                            # double-space forces a hard line break.
-                            if item_text.endswith("  "):
-                                item_text = (
-                                    item_text.rstrip() + "\n" + next_line.strip()
-                                )
-                            else:
-                                item_text = (
-                                    item_text.rstrip("\n") + " " + next_line.strip()
-                                )
-                            i += 1
-                        else:
-                            break
-                    list_items.append({"text": item_text, "sub_items": sub_items})
-                # Allow blank lines between numbered items (loose lists)
-                elif lines[i].strip() == "":
-                    # Peek ahead: if the next non-blank line is a numbered item, skip the blank
-                    peek = i + 1
-                    while peek < len(lines) and lines[peek].strip() == "":
-                        peek += 1
-                    if peek < len(lines) and re.match(r"^\d+\.\s", lines[peek]):
-                        i = peek  # skip blank lines, continue collecting
-                    else:
-                        break
-                else:
-                    break
-            blocks.append({"type": "numbered_list", "items": list_items})
+        # List items — bullets (- ) or numbered (1. ), with arbitrary nesting.
+        # One contiguous list region is consumed and built into a tree. The
+        # top-level marker type picks the block type ("list" vs "numbered_list");
+        # each node still carries its own ordered flag so mixed nesting renders
+        # correctly.
+        elif line.startswith("- ") or re.match(r"^\d+\.\s", line):
+            block, i = _parse_list(lines, i)
+            blocks.append(block)
             continue
 
         # Regular paragraph
@@ -2210,6 +2249,10 @@ def _make_list_level(
 _ABSTRACT_BULLET = 9001
 _ABSTRACT_ORDERED = 9002
 
+# How many nesting levels the bullet/ordered abstracts define. Items deeper than
+# this are clamped to the last level when rendered.
+_LIST_MAX_LEVELS = 5
+
 
 def _ensure_numbering(doc, sc: "StyleConfig"):
     """Create our own bullet and decimal abstractNum definitions once per doc.
@@ -2253,34 +2296,39 @@ def _ensure_numbering(doc, sc: "StyleConfig"):
     def _bindent(i, fallback):
         return b_indents[i] if i < len(b_indents) else fallback
 
+    # Both abstracts define this many levels so deeply nested lists render.
+    _LIST_LEVELS = _LIST_MAX_LEVELS
+    # Default fallbacks for levels beyond the configured glyph/indent arrays:
+    # cycle disc/circle/square and step the indent by 0.25" per level.
+    _default_glyphs = [
+        "\uf0b7",
+        "o",
+        "\uf0a7",
+    ]  # disc, circle, square (Symbol/Wingdings)
+
     if _ABSTRACT_BULLET not in existing_ids:
         abn = OxmlElement("w:abstractNum")
         abn.set(qn("w:abstractNumId"), str(_ABSTRACT_BULLET))
-        abn.append(
-            _make_list_level(
-                0,
-                "bullet",
-                _glyph(0, "\uf0b7"),
-                _in_to_twips(_bindent(0, 0.25)),
-                font=_gfont(0),
+        for lvl in range(_LIST_LEVELS):
+            glyph = _glyph(lvl, _default_glyphs[lvl % len(_default_glyphs)])
+            font = _gfont(lvl) if lvl < len(glyph_fonts) else "Symbol"
+            indent = _bindent(lvl, 0.25 * (lvl + 1))
+            abn.append(
+                _make_list_level(lvl, "bullet", glyph, _in_to_twips(indent), font=font)
             )
-        )
-        abn.append(
-            _make_list_level(
-                1,
-                "bullet",
-                _glyph(1, "o"),
-                _in_to_twips(_bindent(1, 0.5)),
-                font=_gfont(1),
-            )
-        )
         # abstractNum must precede num elements; insert at the front.
         numbering_elm.insert(0, abn)
 
     if _ABSTRACT_ORDERED not in existing_ids:
         abn = OxmlElement("w:abstractNum")
         abn.set(qn("w:abstractNumId"), str(_ABSTRACT_ORDERED))
-        abn.append(_make_list_level(0, "decimal", "%1.", _in_to_twips(o_indent)))
+        for lvl in range(_LIST_LEVELS):
+            # Each level numbers independently (%1., %2., ... keyed to its ilvl)
+            # and indents one step deeper than the ordered base.
+            indent = o_indent + 0.25 * lvl
+            abn.append(
+                _make_list_level(lvl, "decimal", f"%{lvl + 1}.", _in_to_twips(indent))
+            )
         numbering_elm.insert(0, abn)
 
     return _ABSTRACT_BULLET, _ABSTRACT_ORDERED
@@ -2341,6 +2389,67 @@ def _add_heading(doc, text: str, level: int, sc: "StyleConfig"):
     return p
 
 
+def _render_list_block(
+    doc,
+    items,
+    sc: "StyleConfig",
+    anchors,
+    bullet_abstract,
+    numbered_abstract,
+    base_dir=None,
+    allow_remote_images=False,
+):
+    """Render a (possibly nested) list block into ``doc``.
+
+    ``items`` is the node tree from :func:`_parse_list`. Each node carries its own
+    ``ordered`` flag, so bullets, numbered items, and mixed nesting are handled by
+    one recursive walk. One bullet numId and one ordered numId are allocated per
+    top-level block (lazily) so numbering restarts for each new list.
+    """
+    bullet_after = _coerce_number(
+        sc.section("lists").get("bullet", {}).get("space_after_pt"),
+        2,
+        "lists.bullet.space_after_pt",
+    )
+    ordered_after = _coerce_number(
+        sc.section("lists").get("ordered", {}).get("space_after_pt"),
+        2,
+        "lists.ordered.space_after_pt",
+    )
+    num_ids = {}  # "bullet" | "ordered" -> numId, created on first use
+
+    def _walk(nodes, depth):
+        # Clamp depth to the deepest level the abstracts define.
+        ilvl = min(depth, _LIST_MAX_LEVELS - 1)
+        for node in nodes:
+            ordered = node.get("ordered", False) if isinstance(node, dict) else False
+            checked = node.get("checked") if isinstance(node, dict) else None
+            key = "ordered" if ordered else "bullet"
+            if key not in num_ids:
+                abstract = numbered_abstract if ordered else bullet_abstract
+                num_ids[key] = _new_num_id(doc, abstract)
+            p = doc.add_paragraph()
+            _apply_paragraph_format(
+                p, space_after_pt=ordered_after if ordered else bullet_after
+            )
+            _set_list_numbering(p, num_ids[key], ilvl=ilvl)
+            # Task items get a checkbox glyph prefix (☑ checked / ☐ unchecked).
+            if checked is not None:
+                p.add_run("\u2611 " if checked else "\u2610 ")
+            add_formatted_text(
+                p,
+                node["text"] if isinstance(node, dict) else node,
+                anchors,
+                base_dir=base_dir,
+                allow_remote_images=allow_remote_images,
+            )
+            children = node.get("children") if isinstance(node, dict) else None
+            if children:
+                _walk(children, depth + 1)
+
+    _walk(items, 0)
+
+
 def build_docx(
     blocks: list,
     output_path: str,
@@ -2381,9 +2490,8 @@ def build_docx(
     anchors = build_heading_anchors(blocks)
 
     # Create our own list numbering definitions (bullet + decimal) so lists work
-    # without a template's numbering part. Both bullet levels share one abstract.
+    # without a template's numbering part. Each defines several nesting levels.
     bullet_abstract, numbered_abstract = _ensure_numbering(doc, sc)
-    bullet2_abstract = bullet_abstract
 
     for block in blocks:
         if block["type"] in ("h1", "h2", "h3", "h4", "h5", "h6"):
@@ -2566,74 +2674,17 @@ def build_docx(
                 allow_remote_images=allow_remote_images,
             )
 
-        elif block["type"] == "list":
-            # Create a new numId for this bullet list block
-            list_num_id = _new_num_id(doc, bullet_abstract)
-            bullet_after = _coerce_number(
-                sc.section("lists").get("bullet", {}).get("space_after_pt"),
-                2,
-                "lists.bullet.space_after_pt",
+        elif block["type"] in ("list", "numbered_list"):
+            _render_list_block(
+                doc,
+                block["items"],
+                sc,
+                anchors,
+                bullet_abstract,
+                numbered_abstract,
+                base_dir=base_dir,
+                allow_remote_images=allow_remote_images,
             )
-            for item in block["items"]:
-                # Items are dicts: {"text": str, "checked": Optional[bool]}.
-                # checked is None for a normal bullet, True/False for a task item.
-                item_text = item["text"] if isinstance(item, dict) else item
-                checked = item.get("checked") if isinstance(item, dict) else None
-                p = doc.add_paragraph()
-                _apply_paragraph_format(p, space_after_pt=bullet_after)
-                _set_list_numbering(p, list_num_id, ilvl=0)
-                # Task items get a checkbox glyph prefix (☑ checked / ☐ unchecked).
-                # The font inherits from the document default via Normal style.
-                if checked is not None:
-                    p.add_run("\u2611 " if checked else "\u2610 ")
-                add_formatted_text(
-                    p,
-                    item_text,
-                    anchors,
-                    base_dir=base_dir,
-                    allow_remote_images=allow_remote_images,
-                )
-
-        elif block["type"] == "numbered_list":
-            # Create a new numId for this numbered list block (ensures restart)
-            list_num_id = _new_num_id(doc, numbered_abstract)
-            ordered_after = _coerce_number(
-                sc.section("lists").get("ordered", {}).get("space_after_pt"),
-                2,
-                "lists.ordered.space_after_pt",
-            )
-            bullet_after = _coerce_number(
-                sc.section("lists").get("bullet", {}).get("space_after_pt"),
-                2,
-                "lists.bullet.space_after_pt",
-            )
-            for item in block["items"]:
-                item_text = item["text"] if isinstance(item, dict) else item
-                sub_items = item.get("sub_items", []) if isinstance(item, dict) else []
-                p = doc.add_paragraph()
-                _apply_paragraph_format(p, space_after_pt=ordered_after)
-                _set_list_numbering(p, list_num_id, ilvl=0)
-                add_formatted_text(
-                    p,
-                    item_text,
-                    anchors,
-                    base_dir=base_dir,
-                    allow_remote_images=allow_remote_images,
-                )
-                # Render sub-items as indented bullets (level 1 of the bullet list).
-                if sub_items:
-                    sub_num_id = _new_num_id(doc, bullet2_abstract)
-                    for sub in sub_items:
-                        sp = doc.add_paragraph()
-                        _apply_paragraph_format(sp, space_after_pt=bullet_after)
-                        _set_list_numbering(sp, sub_num_id, ilvl=1)
-                        add_formatted_text(
-                            sp,
-                            sub,
-                            anchors,
-                            base_dir=base_dir,
-                            allow_remote_images=allow_remote_images,
-                        )
 
     # Write optional document metadata to the file's core properties.
     cp = doc.core_properties

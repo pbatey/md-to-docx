@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Multi-level nested lists (up to five levels), including mixed
+  ordered/unordered nesting. Nesting is normalized by indentation order, so
+  irregular hand-authored indentation still nests sensibly.
 - `argparse`-based command line interface with `--help` and `--version`.
 - Document metadata written to the `.docx` core properties: the title is taken
   from the first level-1 heading (falling back to the input filename), the
