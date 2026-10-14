@@ -1,12 +1,12 @@
-﻿font: Aptos
+font: Aptos
 heading_font: Aptos Display
 page:
   size: letter
   margins_in:
-    top: 1.0
-    bottom: 1.0
-    left: 1.25
-    right: 1.25
+    top: 0.5
+    bottom: 0.5
+    left: 0.5
+    right: 0.5
 body:
   font: null
   size_pt: 11
@@ -101,8 +101,8 @@ blockquote:
 lists:
   bullet:
     glyphs:
-    - ∩é╖
-    - ∩é╖
+    - 
+    - 
     glyph_fonts:
     - Symbol
     - Symbol

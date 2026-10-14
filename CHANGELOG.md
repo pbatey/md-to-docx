@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Default page margins are now 0.5" on all sides (Microsoft "Narrow") instead of
+  1"/1.25"; override via `page.margins_in` in a `--style` config.
 - The CLI now returns standard exit codes (argparse errors exit `2`); all
   existing flags (`--fetch-remote-images`, `--style`, `--dump-config`) and the
   `MD_TO_DOCX_STYLE` environment variable continue to work unchanged.

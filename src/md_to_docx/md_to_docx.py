@@ -54,7 +54,8 @@ DEFAULT_STYLE = {
     "page": {
         # Letter by default. Either a named size or explicit width/height inches.
         "size": "letter",  # "letter" | "a4"
-        "margins_in": {"top": 1.0, "bottom": 1.0, "left": 1.25, "right": 1.25},
+        # Microsoft "Narrow" margins (0.5" all around) by default.
+        "margins_in": {"top": 0.5, "bottom": 0.5, "left": 0.5, "right": 0.5},
     },
     "body": {
         # null => inherit the global default font (see top-level ``font``).
@@ -793,16 +794,16 @@ def _apply_page_setup(doc, sc: "StyleConfig"):
 
     margins = page.get("margins_in", {}) or {}
     section.top_margin = Inches(
-        _coerce_number(margins.get("top"), 1.0, "page.margins_in.top")
+        _coerce_number(margins.get("top"), 0.5, "page.margins_in.top")
     )
     section.bottom_margin = Inches(
-        _coerce_number(margins.get("bottom"), 1.0, "page.margins_in.bottom")
+        _coerce_number(margins.get("bottom"), 0.5, "page.margins_in.bottom")
     )
     section.left_margin = Inches(
-        _coerce_number(margins.get("left"), 1.25, "page.margins_in.left")
+        _coerce_number(margins.get("left"), 0.5, "page.margins_in.left")
     )
     section.right_margin = Inches(
-        _coerce_number(margins.get("right"), 1.25, "page.margins_in.right")
+        _coerce_number(margins.get("right"), 0.5, "page.margins_in.right")
     )
 
 
