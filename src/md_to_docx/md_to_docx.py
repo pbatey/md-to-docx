@@ -489,7 +489,7 @@ def to_docx_target(raw_path: str) -> str:
     """Swap a Markdown extension for ``.docx``; return other input unchanged."""
     if not _MD_EXT_RE.search(raw_path):
         return raw_path
-    path = raw_path[2:] if raw_path.startswith("./") else raw_path
+    path = raw_path.removeprefix("./")
     return _MD_EXT_RE.sub(".docx", path)
 
 
@@ -694,9 +694,7 @@ def rewrite_link(raw_target: str, ctx: "LinkContext | None") -> "Rewritten | Non
             exists and ctx.tree_files is not None and candidate not in ctx.tree_files
         )
         if not exists or outside:
-            ctx.warn(
-                f"WARNING: {ctx.source_path}: link target not found: {raw_target}"
-            )
+            ctx.warn(f"WARNING: {ctx.source_path}: link target not found: {raw_target}")
     docx_path = to_docx_target(parsed.path)
     target = _build_target(docx_path, ctx, raw_target)
     anchor = bookmark_for_fragment(parsed.fragment) if parsed.fragment else None
@@ -2030,7 +2028,9 @@ def add_formatted_text(
                 )
                 continue
 
-            wiki_match = re.match(r"\x00WIKI\x00([^\x00]*)\x00$", lp) if links_on else None
+            wiki_match = (
+                re.match(r"\x00WIKI\x00([^\x00]*)\x00$", lp) if links_on else None
+            )
             if wiki_match:
                 inner = wiki_match.group(1)
                 rewritten = rewrite_wiki_link(inner, link_ctx)
@@ -3481,7 +3481,9 @@ def main():
     check_output_writable(str(output_path))
     if plan.outdir is not None:
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-    convert_file(input_path, str(output_path), args, link_ctx, announce=True, style=style)
+    convert_file(
+        input_path, str(output_path), args, link_ctx, announce=True, style=style
+    )
 
 
 def _resolve_base_url(args, parser) -> None:
@@ -3565,7 +3567,9 @@ def resolve_mode(args, parser) -> Plan:
     if is_dir:
         rels = discover_tree(input_path, args.follow_links)
         mapping, collisions = plan_outputs(rels, input_path, outdir)
-        return Plan("tree", input_path, list(mapping.items()), outdir, tuple(collisions))
+        return Plan(
+            "tree", input_path, list(mapping.items()), outdir, tuple(collisions)
+        )
 
     if outdir is not None:
         out = outdir / (input_path.stem + ".docx")

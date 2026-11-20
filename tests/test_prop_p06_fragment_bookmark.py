@@ -33,7 +33,7 @@ def test_fragment_equals_bookmark_for_distinct_headings(texts):
     assume(len(set(slugs)) == len(slugs))
     blocks = _blocks(texts)
     build_heading_anchors(blocks)
-    for block, text, slug in zip(blocks, texts, slugs):
+    for block, text, slug in zip(blocks, texts, slugs, strict=True):
         bookmark = block["_bookmark"]
         assert bookmark_for_fragment(slug) == bookmark
         assert bookmark_for_fragment(text) == bookmark

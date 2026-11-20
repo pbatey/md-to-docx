@@ -16,9 +16,9 @@ from md_to_docx.md_to_docx import (
     STYLE_HYPERLINK,
     LinkContext,
     add_formatted_text,
-    build_heading_anchors,
     bookmark_for_fragment,
     bookmark_name,
+    build_heading_anchors,
     normalize_base_url,
 )
 
@@ -83,7 +83,9 @@ def test_example_relative_path():
 
 
 def test_example_dot_slash_uppercase_ext_fragment_text():
-    _check("[S](./My%20Notes.MD#Install Steps)", "My%20Notes.docx", "_toc_install_steps")
+    _check(
+        "[S](./My%20Notes.MD#Install Steps)", "My%20Notes.docx", "_toc_install_steps"
+    )
 
 
 def test_example_angle_brackets_with_space():
@@ -175,9 +177,10 @@ def test_label_with_bold_plain_code_runs_in_one_hyperlink():
     assert runs[1].find(qn("w:rPr")).find(qn("w:b")) is None
     code_rpr = runs[2].find(qn("w:rPr"))
     assert code_rpr.find(qn("w:b")) is None
-    assert code_rpr.find(qn("w:rFonts")) is not None or len(
-        code_rpr.findall(qn("w:rStyle"))
-    ) > 1
+    assert (
+        code_rpr.find(qn("w:rFonts")) is not None
+        or len(code_rpr.findall(qn("w:rStyle"))) > 1
+    )
     assert not p._p.xpath(".//w:hyperlink//w:hyperlink")
 
 

@@ -20,9 +20,11 @@ _path = st.builds(
 )
 
 # Fragments: empty, spaces, '%' sequences (valid and stray), non-ASCII.
-_frag_alphabet = st.sampled_from(list("abcXYZ019 -_%") + ["%20", "%C3%A9", "é", "ü", "日本", "%zz"])
-_fragment = st.lists(_frag_alphabet, max_size=6).map("".join).filter(
-    lambda f: f == f.strip()
+_frag_alphabet = st.sampled_from(
+    list("abcXYZ019 -_%") + ["%20", "%C3%A9", "é", "ü", "日本", "%zz"]
+)
+_fragment = (
+    st.lists(_frag_alphabet, max_size=6).map("".join).filter(lambda f: f == f.strip())
 )
 _base_url = st.one_of(st.none(), st.just("https://example.com/docs"))
 

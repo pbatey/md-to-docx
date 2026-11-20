@@ -3,12 +3,12 @@ import tempfile
 import zipfile
 from pathlib import Path
 
-from hypothesis import given, settings, strategies as st
+from golden_fixtures import load_golden
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from md_to_docx import build_docx, parse_markdown
 from md_to_docx.md_to_docx import LinkContext
-
-from golden_fixtures import load_golden
 
 GOLDEN = load_golden()
 
@@ -31,7 +31,9 @@ def _norm(xml: str) -> str:
 def _convert(markdown: str, link_ctx) -> str:
     with tempfile.TemporaryDirectory() as tmp:
         out = Path(tmp) / "out.docx"
-        build_docx(parse_markdown(markdown), str(out), link_ctx=link_ctx, announce=False)
+        build_docx(
+            parse_markdown(markdown), str(out), link_ctx=link_ctx, announce=False
+        )
         with zipfile.ZipFile(out) as z:
             return _norm(z.read("word/document.xml").decode("utf-8"))
 

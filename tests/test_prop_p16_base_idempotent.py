@@ -1,4 +1,5 @@
 """Property test for Base_URL normalization idempotence and no double-encoding."""
+
 # Feature: sibling-markdown-links, Property 16: Base URL normalization is idempotent and never double-encodes
 import re
 
@@ -26,13 +27,15 @@ _piece = st.one_of(
 )
 _path = st.lists(_piece, max_size=8).map("".join)
 _url = st.builds(
-    lambda scheme, host, path, slash, pad: pad[0]
-    + scheme
-    + "://"
-    + host
-    + ("/" + path if path or slash else "")
-    + ("/" if slash else "")
-    + pad[1],
+    lambda scheme, host, path, slash, pad: (
+        pad[0]
+        + scheme
+        + "://"
+        + host
+        + ("/" + path if path or slash else "")
+        + ("/" if slash else "")
+        + pad[1]
+    ),
     _scheme,
     _host,
     _path,

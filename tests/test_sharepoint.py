@@ -8,10 +8,9 @@ import sys
 import zipfile
 
 import pytest
+from golden_fixtures import load_golden
 
 from md_to_docx.md_to_docx import main, normalize_base_url, sharepoint_folder_url
-
-from golden_fixtures import load_golden
 
 GOLDEN = load_golden()
 
@@ -104,12 +103,17 @@ def test_sp_identical_to_sharepoint(tmp_path, monkeypatch, capsys):
     for flag in ("--sharepoint", "--sp"):
         (tmp_path / flag.strip("-")).mkdir()
         d = make_tree(tmp_path / flag.strip("-"))
-        code, out, err = run([flag, "--link-base-url", VIEW, "-r", d],
-                             monkeypatch, capsys)
+        code, out, err = run(
+            [flag, "--link-base-url", VIEW, "-r", d], monkeypatch, capsys
+        )
         assert code == 0
         results.append(
-            (out.replace(flag, "F"), err, targets(d / "b.docx"),
-             norm(part(d / "b.docx", "word/document.xml")))
+            (
+                out.replace(flag, "F"),
+                err,
+                targets(d / "b.docx"),
+                norm(part(d / "b.docx", "word/document.xml")),
+            )
         )
     a, b = results
     assert a[1:] == b[1:]
@@ -132,8 +136,9 @@ def test_sharepoint_requires_base_url(tmp_path, monkeypatch, capsys):
 
 def test_tree_run_writes_web1_link_with_anchor(tmp_path, monkeypatch, capsys):
     d = make_tree(tmp_path)
-    code, _, _ = run(["--sharepoint", "--link-base-url", VIEW, "-r", d],
-                     monkeypatch, capsys)
+    code, _, _ = run(
+        ["--sharepoint", "--link-base-url", VIEW, "-r", d], monkeypatch, capsys
+    )
     assert code == 0
     links = [t for t in targets(d / "b.docx") if t.endswith("a.docx?web=1")]
     assert links, targets(d / "b.docx")
@@ -143,8 +148,9 @@ def test_tree_run_writes_web1_link_with_anchor(tmp_path, monkeypatch, capsys):
 
 def test_no_dropped_query_warning_for_converted_view_url(tmp_path, monkeypatch, capsys):
     d = make_tree(tmp_path)
-    code, _, err = run(["--sharepoint", "--link-base-url", VIEW, "-r", d],
-                       monkeypatch, capsys)
+    code, _, err = run(
+        ["--sharepoint", "--link-base-url", VIEW, "-r", d], monkeypatch, capsys
+    )
     assert code == 0
     assert "dropped" not in err
     assert "WARNING" not in err
@@ -163,7 +169,10 @@ def test_no_sibling_links_with_sharepoint_matches_golden(tmp_path, monkeypatch, 
     src = tmp_path / "mixed.md"
     src.write_text(md, encoding="utf-8")
     out = tmp_path / "mixed.docx"
-    code, _, _ = run(["--no-sibling-links", "--sharepoint", "--link-base-url", VIEW,
-                      src, out], monkeypatch, capsys)
+    code, _, _ = run(
+        ["--no-sibling-links", "--sharepoint", "--link-base-url", VIEW, src, out],
+        monkeypatch,
+        capsys,
+    )
     assert code == 0
     assert norm(part(out, "word/document.xml")) == norm(expected)

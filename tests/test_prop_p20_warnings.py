@@ -15,28 +15,32 @@ _stem = st.text(alphabet="abcdefgh0123", min_size=1, max_size=6)
 _fragment = st.one_of(st.just(""), st.sampled_from(["#intro", "#Some%20Heading"]))
 
 # (existing stems, missing stems, shuffled occurrence list of (is_missing, stem, fragment))
-_cases = st.tuples(
-    st.sets(_stem, max_size=3),
-    st.sets(_stem, max_size=3),
-).flatmap(
-    lambda sets: st.tuples(
-        st.just(sorted("e" + s for s in sets[0])),
-        st.just(sorted("m" + s for s in sets[1])),
+_cases = (
+    st.tuples(
+        st.sets(_stem, max_size=3),
+        st.sets(_stem, max_size=3),
     )
-).flatmap(
-    lambda names: st.tuples(
-        st.just(names[0]),
-        st.just(names[1]),
-        st.lists(
-            st.tuples(
-                st.sampled_from(
-                    [(False, n) for n in names[0]] + [(True, n) for n in names[1]]
-                    or [(True, "mx")]
+    .flatmap(
+        lambda sets: st.tuples(
+            st.just(sorted("e" + s for s in sets[0])),
+            st.just(sorted("m" + s for s in sets[1])),
+        )
+    )
+    .flatmap(
+        lambda names: st.tuples(
+            st.just(names[0]),
+            st.just(names[1]),
+            st.lists(
+                st.tuples(
+                    st.sampled_from(
+                        [(False, n) for n in names[0]] + [(True, n) for n in names[1]]
+                        or [(True, "mx")]
+                    ),
+                    _fragment,
                 ),
-                _fragment,
+                max_size=8,
             ),
-            max_size=8,
-        ),
+        )
     )
 )
 

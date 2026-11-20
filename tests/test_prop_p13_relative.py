@@ -13,7 +13,9 @@ from md_to_docx.md_to_docx import (
 )
 
 _name = st.text(
-    alphabet=st.characters(min_codepoint=48, max_codepoint=122, whitelist_categories=("L", "N")),
+    alphabet=st.characters(
+        min_codepoint=48, max_codepoint=122, whitelist_categories=("L", "N")
+    ),
     min_size=1,
     max_size=8,
 )

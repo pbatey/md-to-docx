@@ -10,10 +10,9 @@ import sys
 import zipfile
 
 import pytest
+from golden_fixtures import load_golden
 
 from md_to_docx.md_to_docx import main
-
-from golden_fixtures import load_golden
 
 GOLDEN = load_golden()
 
@@ -68,22 +67,31 @@ def docx_files(root):
 def test_help_lists_new_options(monkeypatch, capsys):
     code, out, _ = run(["--help"], monkeypatch, capsys)
     assert code == 0
-    for opt in ("--no-sibling-links", "--link-base-url", "-r", "--recursive",
-                "-o", "--outdir"):
+    for opt in (
+        "--no-sibling-links",
+        "--link-base-url",
+        "-r",
+        "--recursive",
+        "-o",
+        "--outdir",
+    ):
         assert opt in out
 
 
 def test_no_sibling_links_accepted(tmp_path, monkeypatch, capsys):
     src = write(tmp_path / "a.md")
-    code, _, _ = run(["--no-sibling-links", src, tmp_path / "a.docx"], monkeypatch, capsys)
+    code, _, _ = run(
+        ["--no-sibling-links", src, tmp_path / "a.docx"], monkeypatch, capsys
+    )
     assert code == 0
     assert (tmp_path / "a.docx").exists()
 
 
 def test_no_sibling_links_rejects_value(tmp_path, monkeypatch, capsys):
     src = write(tmp_path / "a.md")
-    code, _, err = run(["--no-sibling-links=yes", src, tmp_path / "a.docx"],
-                       monkeypatch, capsys)
+    code, _, err = run(
+        ["--no-sibling-links=yes", src, tmp_path / "a.docx"], monkeypatch, capsys
+    )
     assert code == 2
     assert "--no-sibling-links" in err
     assert not (tmp_path / "a.docx").exists()
@@ -91,8 +99,11 @@ def test_no_sibling_links_rejects_value(tmp_path, monkeypatch, capsys):
 
 def test_link_base_url_valid(tmp_path, monkeypatch, capsys):
     src = write(tmp_path / "a.md", "[x](other.md)\n")
-    code, _, _ = run(["--link-base-url", "https://example.com/docs/", src,
-                      tmp_path / "a.docx"], monkeypatch, capsys)
+    code, _, _ = run(
+        ["--link-base-url", "https://example.com/docs/", src, tmp_path / "a.docx"],
+        monkeypatch,
+        capsys,
+    )
     assert code == 0
     # other.md is not in a tree run, so it stays relative in single-file mode.
     assert "other.docx" in " ".join(targets(tmp_path / "a.docx"))
@@ -101,8 +112,9 @@ def test_link_base_url_valid(tmp_path, monkeypatch, capsys):
 @pytest.mark.parametrize("bad", ["ftp://example.com", "example.com", "", "https://"])
 def test_link_base_url_invalid(bad, tmp_path, monkeypatch, capsys):
     src = write(tmp_path / "a.md")
-    code, _, err = run(["--link-base-url", bad, src, tmp_path / "a.docx"],
-                       monkeypatch, capsys)
+    code, _, err = run(
+        ["--link-base-url", bad, src, tmp_path / "a.docx"], monkeypatch, capsys
+    )
     assert code == 2
     assert "--link-base-url" in err
     assert not (tmp_path / "a.docx").exists()
@@ -157,7 +169,11 @@ def test_nested_tree_in_place_and_sorted_progress(tmp_path, monkeypatch, capsys)
     assert docx_files(root) == ["a/b/c.docx", "a/m.docx", "b.docx", "z.docx"]
     lines = [ln for ln in out.splitlines() if " -> " in ln]
     assert [ln.split(" -> ")[0] for ln in lines] == [
-        "a/b/c.md", "a/m.md", "b.md", "z.md"]
+        "a/b/c.md",
+        "a/m.md",
+        "b.md",
+        "z.md",
+    ]
     assert "Converted 4 file(s), 0 failed" in out
 
 
@@ -225,8 +241,9 @@ def test_r_with_output_rejected(tmp_path, monkeypatch, capsys):
 
 def test_outdir_with_output_rejected(tmp_path, monkeypatch, capsys):
     src = write(tmp_path / "a.md")
-    code, _, err = run(["--outdir", tmp_path / "o", src, tmp_path / "a.docx"],
-                       monkeypatch, capsys)
+    code, _, err = run(
+        ["--outdir", tmp_path / "o", src, tmp_path / "a.docx"], monkeypatch, capsys
+    )
     assert code == 2
     assert "--outdir" in err
     assert not (tmp_path / "o").exists()
@@ -274,11 +291,14 @@ def test_outdir_is_a_file(tmp_path, monkeypatch, capsys):
     assert docx_files(tmp_path) == []
 
 
-def test_link_base_url_resolves_outside_tree_with_climbing(tmp_path, monkeypatch, capsys):
+def test_link_base_url_resolves_outside_tree_with_climbing(
+    tmp_path, monkeypatch, capsys
+):
     root = tmp_path / "in"
     write(root / "a" / "b" / "x.md", "[y](../y.md)\n")
-    code, _, _ = run(["-r", root, "--link-base-url", "https://example.com/docs"],
-                     monkeypatch, capsys)
+    code, _, _ = run(
+        ["-r", root, "--link-base-url", "https://example.com/docs"], monkeypatch, capsys
+    )
     assert code == 0
     assert "https://example.com/docs/a/y.docx" in targets(root / "a" / "b" / "x.docx")
 

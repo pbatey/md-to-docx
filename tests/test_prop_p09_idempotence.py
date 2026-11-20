@@ -1,4 +1,5 @@
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from md_to_docx.md_to_docx import to_docx_target
 

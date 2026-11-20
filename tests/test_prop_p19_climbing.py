@@ -8,7 +8,9 @@ from hypothesis import strategies as st
 from md_to_docx.md_to_docx import encode_path, normalize_base_url, resolve_absolute
 
 _seg = st.text(
-    alphabet=st.characters(min_codepoint=33, max_codepoint=0x2FF, blacklist_characters="/\\?#%"),
+    alphabet=st.characters(
+        min_codepoint=33, max_codepoint=0x2FF, blacklist_characters="/\\?#%"
+    ),
     min_size=1,
     max_size=8,
 ).filter(lambda s: s not in (".", ".."))
@@ -35,7 +37,9 @@ _cases = st.tuples(
 @given(base=_bases, case=_cases)
 def test_climbing_above_base_is_discarded(base, case):
     source_dir, extra, tail = case
-    docx_path = "/".join([".."] * (len(source_dir) + extra) + tail[:-1] + [tail[-1] + ".docx"])
+    docx_path = "/".join(
+        [".."] * (len(source_dir) + extra) + tail[:-1] + [tail[-1] + ".docx"]
+    )
 
     url, climbed = resolve_absolute(base, source_dir, docx_path)
 

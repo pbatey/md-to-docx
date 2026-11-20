@@ -7,7 +7,8 @@ Feature: sibling-markdown-links, Property 22: Mirrored output set
 
 from pathlib import Path
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from md_to_docx.md_to_docx import output_relpath, plan_outputs
 

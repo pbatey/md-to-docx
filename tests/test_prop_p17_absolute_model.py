@@ -3,6 +3,7 @@
 Feature: sibling-markdown-links, Property 17: Absolute link matches the path-resolution model
 **Validates: Requirements 8.4, 8.5, 8.6, 12.3, 12.4, 13.13**
 """
+
 import posixpath
 
 from hypothesis import given, settings

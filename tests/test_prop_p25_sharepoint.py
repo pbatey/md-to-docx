@@ -33,8 +33,12 @@ _bases = st.builds(
     st.lists(st.text(alphabet="abcXYZ09-_ ", min_size=1, max_size=6), max_size=3),
 )
 
-_dirs = st.lists(st.text(alphabet="abcXYZ09-_ ", min_size=1, max_size=5), max_size=3).map(tuple)
-_fragments = st.one_of(st.just(""), st.text(alphabet="abcXYZ 09-", min_size=1, max_size=10))
+_dirs = st.lists(
+    st.text(alphabet="abcXYZ09-_ ", min_size=1, max_size=5), max_size=3
+).map(tuple)
+_fragments = st.one_of(
+    st.just(""), st.text(alphabet="abcXYZ 09-", min_size=1, max_size=10)
+)
 
 
 def _sibling(segs, ext, fragment):
@@ -50,11 +54,13 @@ _sibling_targets = st.builds(
 )
 
 _wiki_inners = st.builds(
-    lambda segs, frag, label: "/".join(segs)
-    + ("#" + frag if frag else "")
-    + ("|" + label if label else ""),
+    lambda segs, frag, label: (
+        "/".join(segs) + ("#" + frag if frag else "") + ("|" + label if label else "")
+    ),
     st.lists(
-        st.text(alphabet="abcXYZ09-_ ", min_size=1, max_size=6).filter(lambda s: s.strip()),
+        st.text(alphabet="abcXYZ09-_ ", min_size=1, max_size=6).filter(
+            lambda s: s.strip()
+        ),
         min_size=1,
         max_size=3,
     ),
@@ -116,7 +122,9 @@ def test_wiki_link_suffix(base, rel_dir, inner):
 @settings(max_examples=100)
 @given(
     host=st.from_regex(r"[a-z][a-z0-9]{0,7}\.sharepoint\.com", fullmatch=True),
-    folder=st.lists(st.text(alphabet="abcXYZ09-_ ", min_size=1, max_size=6), min_size=1, max_size=4),
+    folder=st.lists(
+        st.text(alphabet="abcXYZ09-_ ", min_size=1, max_size=6), min_size=1, max_size=4
+    ),
     view=st.sampled_from(["AllItems.aspx", "allitems.ASPX", "Custom.aspx"]),
     use_id=st.booleans(),
     raw=_sibling_targets,

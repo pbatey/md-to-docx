@@ -8,14 +8,18 @@ from hypothesis import strategies as st
 from md_to_docx.md_to_docx import parse_link_target, to_docx_target
 
 _name = st.text(
-    alphabet=st.characters(min_codepoint=48, max_codepoint=122, whitelist_categories=("L", "N")),
+    alphabet=st.characters(
+        min_codepoint=48, max_codepoint=122, whitelist_categories=("L", "N")
+    ),
     min_size=1,
     max_size=8,
 )
 _segment = st.one_of(_name, st.just(".."), st.just("."))
 _ext = st.sampled_from(["md", "markdown"]).flatmap(
     lambda e: st.lists(st.booleans(), min_size=len(e), max_size=len(e)).map(
-        lambda flags: "".join(c.upper() if f else c for c, f in zip(e, flags))
+        lambda flags: "".join(
+            c.upper() if f else c for c, f in zip(e, flags, strict=True)
+        )
     )
 )
 _fragment = st.text(alphabet="abcdefXYZ0-_", max_size=8)
@@ -39,7 +43,7 @@ def test_path_rewrite_preserves_all_but_extension(path):
     assert out.endswith(".docx")
     assert not out.endswith(".DOCX") or out.endswith(".docx")
 
-    stripped = path[2:] if path.startswith("./") else path
+    stripped = path.removeprefix("./")
     base_in = re.sub(r"\.(?:md|markdown)$", "", stripped, flags=re.IGNORECASE)
     assert out[: -len(".docx")] == base_in
 

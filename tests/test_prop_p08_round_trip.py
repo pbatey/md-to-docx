@@ -1,14 +1,13 @@
 """Property test for docx path round trip."""
 
-from hypothesis import given, settings, strategies as st
+from hypothesis import given, settings
+from hypothesis import strategies as st
 
 from md_to_docx.md_to_docx import encode_path, percent_decode, to_docx_target
 
 # Feature: sibling-markdown-links, Property 8: Docx path round trip
 
-_text = st.text(
-    alphabet=st.characters(blacklist_categories=("Cs",)), max_size=40
-)
+_text = st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=40)
 
 
 @st.composite

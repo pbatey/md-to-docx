@@ -82,15 +82,17 @@ flowchart TD
 ```python
 @dataclass(frozen=True)
 class SiblingTarget:
-    path: str        # decoded, forward slashes, original extension
-    fragment: str    # decoded, "" when absent or empty
+    path: str  # decoded, forward slashes, original extension
+    fragment: str  # decoded, "" when absent or empty
 
-_SCHEME_RE   = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
-_MD_EXT_RE   = re.compile(r"\.(?:md|markdown)$", re.IGNORECASE)
-_PCT_RUN_RE  = re.compile(r"(?:%[0-9A-Fa-f]{2})+")
-_PCT_SEQ_RE  = re.compile(r"%[0-9A-Fa-f]{2}")
-_SAFE_PATH   = "/-._~"
+
+_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+_MD_EXT_RE = re.compile(r"\.(?:md|markdown)$", re.IGNORECASE)
+_PCT_RUN_RE = re.compile(r"(?:%[0-9A-Fa-f]{2})+")
+_PCT_SEQ_RE = re.compile(r"%[0-9A-Fa-f]{2}")
+_SAFE_PATH = "/-._~"
 BOOKMARK_MAX = 40
+
 
 def percent_decode(s: str) -> str: ...
 def parse_link_target(raw: str) -> "SiblingTarget | None": ...
@@ -98,8 +100,10 @@ def to_docx_target(raw_path: str) -> str: ...
 def bookmark_name(slug: str) -> str: ...
 def bookmark_for_fragment(fragment: str) -> str: ...
 def encode_path(path: str) -> str: ...
-def normalize_base_url(raw: str) -> str: ...        # raises ValueError
-def resolve_absolute(base: str, source_dir: tuple, docx_path: str) -> tuple[str, bool]: ...
+def normalize_base_url(raw: str) -> str: ...  # raises ValueError
+def resolve_absolute(
+    base: str, source_dir: tuple, docx_path: str
+) -> tuple[str, bool]: ...
 def wiki_parts(inner: str) -> "WikiLink | None": ...
 ```
 
@@ -165,22 +169,30 @@ For a note with a path (`folder/Note`) the visible text keeps today's behavior a
 ```python
 @dataclass(frozen=True)
 class LinkContext:
-    enabled: bool = True                    # False when --no-sibling-links
-    base_url: str | None = None             # normalized, no trailing "/"
-    link_suffix: str = ""                   # "?web=1" with --sharepoint, else ""
-    source_path: str = ""                   # for warning text
-    source_dir: Path | None = None          # directory used for existence checks
-    source_rel_dir: tuple[str, ...] = ()    # Single_File_Mode: ()
-    tree_files: frozenset[Path] | None = None  # resolved paths; None outside Recursive_Mode
+    enabled: bool = True  # False when --no-sibling-links
+    base_url: str | None = None  # normalized, no trailing "/"
+    link_suffix: str = ""  # "?web=1" with --sharepoint, else ""
+    source_path: str = ""  # for warning text
+    source_dir: Path | None = None  # directory used for existence checks
+    source_rel_dir: tuple[str, ...] = ()  # Single_File_Mode: ()
+    tree_files: frozenset[Path] | None = (
+        None  # resolved paths; None outside Recursive_Mode
+    )
     warn: Callable[[str], None] = _warn_stderr
+
 
 @dataclass(frozen=True)
 class Rewritten:
-    target: str              # relationship target: relative path or Absolute_Link, never contains "#"
-    anchor: str | None       # bookmark name for w:anchor, None when there is no fragment
+    target: (
+        str  # relationship target: relative path or Absolute_Link, never contains "#"
+    )
+    anchor: str | None  # bookmark name for w:anchor, None when there is no fragment
+
 
 def rewrite_link(raw_target: str, ctx: LinkContext) -> "Rewritten | None": ...
-def rewrite_wiki_link(inner: str, ctx: LinkContext) -> "tuple[Rewritten, str] | None": ...   # (rewritten, label)
+def rewrite_wiki_link(
+    inner: str, ctx: LinkContext
+) -> "tuple[Rewritten, str] | None": ...  # (rewritten, label)
 ```
 
 `rewrite_link` returns `None` when `ctx` is `None` or disabled, or when `parse_link_target` returns `None`. In those cases the caller falls through to the old branches. Otherwise it:
@@ -213,7 +225,7 @@ used = set()
 count = slug_counts.get(base_slug, 0)
 while True:
     slug = base_slug if count == 0 else f"{base_slug}-{count}"
-    bookmark = bookmark_name(slug)          # <= 40 chars, [A-Za-z0-9_], starts with "_"
+    bookmark = bookmark_name(slug)  # <= 40 chars, [A-Za-z0-9_], starts with "_"
     count += 1
     if bookmark not in used:
         break
@@ -242,13 +254,18 @@ The `input` metavar and help change to `input` (file or directory). The `output`
 ```python
 SKIPPED_DIR_NAMES = frozenset({"node_modules", "venv", "__pycache__"})
 
-def is_skipped_dir(name: str) -> bool: ...                      # name.startswith(".") or in SKIPPED_DIR_NAMES
-def discover_tree(root: Path) -> list[str]: ...                 # sorted Relative_Paths (posix)
-def output_relpath(rel: str) -> str: ...                        # replace .md/.markdown with .docx
-def plan_outputs(rels, input_root, outdir) -> tuple[dict[str, Path], list[Collision]]: ...
-def resolve_mode(args, parser) -> "Plan": ...                   # validates option combinations
+
+def is_skipped_dir(
+    name: str,
+) -> bool: ...  # name.startswith(".") or in SKIPPED_DIR_NAMES
+def discover_tree(root: Path) -> list[str]: ...  # sorted Relative_Paths (posix)
+def output_relpath(rel: str) -> str: ...  # replace .md/.markdown with .docx
+def plan_outputs(
+    rels, input_root, outdir
+) -> tuple[dict[str, Path], list[Collision]]: ...
+def resolve_mode(args, parser) -> "Plan": ...  # validates option combinations
 def convert_file(input_path, output_path, opts, link_ctx, *, announce) -> None: ...
-def convert_tree(plan, opts) -> int: ...                        # returns exit status
+def convert_tree(plan, opts) -> int: ...  # returns exit status
 ```
 
 **`discover_tree(root)`** walks with `os.walk(root, followlinks=False)`. It prunes `dirnames` in place with `is_skipped_dir` so skipped directories and their contents are never visited (10.9), which also means symlinked directories are listed but never entered, so a link cycle cannot loop (10.10). A file is selected when its name does not start with `.`, its suffix matches `_MD_EXT_RE`, and `os.path.isfile` is true (so a symlink to a file is converted and a symlink to a directory named `x.md` is not). The result is sorted with Python string ordering, which is by code point (10.11). The root itself is never tested against the skip rules, so `md-to-docx -r .` works.
@@ -280,19 +297,48 @@ def convert_tree(plan, opts) -> int: ...                        # returns exit s
 
 ```python
 @dataclass(frozen=True)
-class SiblingTarget:   path: str; fragment: str
+class SiblingTarget:
+    path: str
+    fragment: str
+
+
 @dataclass(frozen=True)
-class WikiLink:        note: str; heading: str; label: str
+class WikiLink:
+    note: str
+    heading: str
+    label: str
+
+
 @dataclass(frozen=True)
-class Rewritten:       target: str; anchor: str | None
+class Rewritten:
+    target: str
+    anchor: str | None
+
+
 @dataclass(frozen=True)
-class RunSpec:         text: str; flags: frozenset[str]     # inline formats active for this run
+class RunSpec:
+    text: str
+    flags: frozenset[str]  # inline formats active for this run
+
+
 @dataclass(frozen=True)
-class LinkContext:     enabled, base_url, source_path, source_dir, source_rel_dir, tree_files, warn
+class LinkContext:
+    enabled, base_url, source_path, source_dir, source_rel_dir, tree_files, warn
+
+
 @dataclass(frozen=True)
-class Plan:            mode: "single" | "tree"; input_root: Path | None; items: list[tuple[str, Path]]; outdir: Path | None
+class Plan:
+    mode: "single" | "tree"
+    input_root: Path | None
+    items: list[tuple[str, Path]]
+    outdir: Path | None
+
+
 @dataclass(frozen=True)
-class Collision:       dir: str; stem: str; files: tuple[str, ...]
+class Collision:
+    dir: str
+    stem: str
+    files: tuple[str, ...]
 ```
 
 Resulting XML shape of a rewritten link (relationship `rId7` is external, target `docs/setup.docx`):

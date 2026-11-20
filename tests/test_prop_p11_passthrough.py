@@ -11,13 +11,18 @@ from md_to_docx.md_to_docx import (
 )
 
 _name = st.text(alphabet="abcdefXYZ0123-_", min_size=1, max_size=8)
-_label = st.text(alphabet="abc XYZ", min_size=1, max_size=10).filter(lambda s: s.strip())
+_label = st.text(alphabet="abc XYZ", min_size=1, max_size=10).filter(
+    lambda s: s.strip()
+)
 
 _external = st.builds(
     lambda scheme, host, path: f"{scheme}://{host}.example/{path}",
     st.sampled_from(["http", "https"]),
     _name,
-    st.one_of(_name, st.builds(lambda n, e: n + "." + e, _name, st.sampled_from(["md", "html"]))),
+    st.one_of(
+        _name,
+        st.builds(lambda n, e: n + "." + e, _name, st.sampled_from(["md", "html"])),
+    ),
 )
 _mailto = _name.map(lambda n: f"mailto:{n}@example.com")
 _anchor = _name.map(lambda n: "#" + n)

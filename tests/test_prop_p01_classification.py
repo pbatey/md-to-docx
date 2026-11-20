@@ -17,8 +17,12 @@ _ALPHABET = st.characters(
     blacklist_categories=("Cs",),
 )
 _text = st.text(_ALPHABET, max_size=20)
-_ext = st.sampled_from(["", ".md", ".markdown", ".MD", ".Md", ".MarkDown", ".txt", ".mdx", ".md.bak"])
-_prefix = st.sampled_from(["", "#", "/", "http://", "https://x/", "mailto:", "a+b.c-d:", "./", "../", "sub/"])
+_ext = st.sampled_from(
+    ["", ".md", ".markdown", ".MD", ".Md", ".MarkDown", ".txt", ".mdx", ".md.bak"]
+)
+_prefix = st.sampled_from(
+    ["", "#", "/", "http://", "https://x/", "mailto:", "a+b.c-d:", "./", "../", "sub/"]
+)
 _frag = st.one_of(st.just(""), _text.map(lambda t: "#" + t.replace("#", "")))
 _wrap = st.booleans()
 _pad = st.sampled_from(["", " ", "\t", "  "])
@@ -31,7 +35,7 @@ def _expected(raw: str) -> bool:
         if end == -1:
             return False
         s = s[1:end]
-    if not s or s.startswith("#") or s.startswith("/"):
+    if not s or s.startswith(("#", "/")):
         return False
     if re.match(r"^[A-Za-z][A-Za-z0-9+.\-]*:", s):
         return False
