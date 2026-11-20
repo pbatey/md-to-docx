@@ -29,7 +29,7 @@ Homepage = "https://github.com/pbatey/md-to-docx"
 Source = "https://github.com/pbatey/md-to-docx"
 
 [dependency-groups]
-dev = ["pytest>=8", "hypothesis>=6"]
+dev = ["pytest>=8", "hypothesis>=6", "ruff"]
 
 # TestPyPI target for dry-run publishing (see .github/workflows/release-testpypi.yaml).
 [[tool.uv.index]]
