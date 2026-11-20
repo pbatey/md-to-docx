@@ -14,12 +14,16 @@ especially preserving line breaks within email body blockquotes.
 """
 
 import argparse
+import hashlib
 import io
 import os
 import re
 import sys
+import unicodedata
+import urllib.parse
 import urllib.request
 from copy import deepcopy
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -394,10 +398,196 @@ class StyleConfig:
 
 
 # The style in effect for the current build_docx call. Inline helpers
-# (_style_run/_emit_run) read this so they can apply body and inline-code
+# (_apply_run_flags/_emit_run) read this so they can apply body and inline-code
 # formatting without threading a config argument through every call site. It is
 # set at the start of build_docx and reset when done.
 _ACTIVE_STYLE = StyleConfig(DEFAULT_STYLE)
+
+# --------------------------------------------------------------------------- #
+# Sibling Markdown link layer (pure functions, standard library only)
+# --------------------------------------------------------------------------- #
+_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.\-]*:")
+_MD_EXT_RE = re.compile(r"\.(?:md|markdown)$", re.IGNORECASE)
+_PCT_RUN_RE = re.compile(r"(?:%[0-9A-Fa-f]{2})+")
+_PCT_SEQ_RE = re.compile(r"%[0-9A-Fa-f]{2}")
+_SAFE_PATH = "/-._~"
+
+
+@dataclass(frozen=True)
+class SiblingTarget:
+    path: str  # decoded, forward slashes, original extension
+    fragment: str  # decoded, "" when absent or empty
+
+
+@dataclass(frozen=True)
+class WikiLink:
+    note: str  # "" for a same-document ``[[#Heading]]``
+    heading: str  # "" when absent
+    label: str  # visible text (may contain inline formatting)
+
+
+def wiki_parts(inner: str) -> "WikiLink | None":
+    """Parse the text between ``[[`` and ``]]``; None when malformed."""
+    if not isinstance(inner, str) or not inner.strip():
+        return None
+    target, sep, label = inner.partition("|")
+    if sep and not label.strip():
+        return None
+    target = target.strip()
+    note, _, heading = target.partition("#")
+    note, heading = note.strip(), heading.strip()
+    if not note and not heading:
+        return None
+    if sep:
+        shown = label.strip()
+    elif note:
+        shown = target if heading else note
+    else:
+        shown = heading
+    return WikiLink(note, heading, shown)
+
+
+def percent_decode(s: str) -> str:
+    """Decode runs of ``%XX`` as UTF-8; leave invalid runs and stray ``%`` as is."""
+
+    def _dec(m):
+        try:
+            return bytes.fromhex(m.group(0).replace("%", "")).decode("utf-8")
+        except (UnicodeDecodeError, ValueError):
+            return m.group(0)
+
+    return _PCT_RUN_RE.sub(_dec, s)
+
+
+def parse_link_target(raw: str) -> "SiblingTarget | None":
+    """Return a SiblingTarget for a relative Markdown-file link, else None."""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip()
+    if not s:
+        return None
+    if s.startswith("<"):
+        end = s.find(">")
+        if end == -1:
+            return None
+        s = s[1:end]
+    if not s or s.startswith("#"):
+        return None
+    if _SCHEME_RE.match(s):
+        return None
+    if s.startswith("/"):
+        return None
+    path_part, _, fragment_part = s.partition("#")
+    path = percent_decode(path_part).replace("\\", "/")
+    fragment = percent_decode(fragment_part)
+    if not _MD_EXT_RE.search(path):
+        return None
+    return SiblingTarget(path, fragment)
+
+
+def to_docx_target(raw_path: str) -> str:
+    """Swap a Markdown extension for ``.docx``; return other input unchanged."""
+    if not _MD_EXT_RE.search(raw_path):
+        return raw_path
+    path = raw_path[2:] if raw_path.startswith("./") else raw_path
+    return _MD_EXT_RE.sub(".docx", path)
+
+
+def encode_path(path: str) -> str:
+    """Percent-encode a path for use as a hyperlink address."""
+    return urllib.parse.quote(path, safe=_SAFE_PATH)
+
+
+_URL_SAFE = "/:@!$&'()*+,;=-._~[]"
+
+
+def _encode_once(s: str) -> str:
+    """Percent-encode ``s`` while leaving existing valid ``%XX`` escapes alone."""
+    out = []
+    pos = 0
+    for m in _PCT_SEQ_RE.finditer(s):
+        out.append(urllib.parse.quote(s[pos : m.start()], safe=_URL_SAFE))
+        out.append(m.group(0))
+        pos = m.end()
+    out.append(urllib.parse.quote(s[pos:], safe=_URL_SAFE))
+    return "".join(out)
+
+
+def normalize_base_url(raw: str) -> str:
+    """Validate and normalize a ``--link-base-url`` value.
+
+    Raises ``ValueError`` (naming the value) unless it is an http(s) URL with a
+    host. Query and fragment are dropped (the CLI layer warns). The result has
+    a lowercase scheme, no trailing ``/``, and is idempotent.
+    """
+    text = raw.strip() if isinstance(raw, str) else ""
+    try:
+        parts = urllib.parse.urlsplit(text)
+        host = parts.hostname
+    except ValueError:
+        parts, host = None, None
+    if (
+        parts is None
+        or parts.scheme.lower() not in ("http", "https")
+        or not parts.netloc
+        or not host
+    ):
+        raise ValueError(
+            f"invalid --link-base-url: {raw!r} (expected an http or https URL "
+            "with a host)"
+        )
+    url = f"{parts.scheme.lower()}://{_encode_once(parts.netloc)}{_encode_once(parts.path)}"
+    return url.rstrip("/")
+
+
+_SP_VIEW_RE = re.compile(r"(?i)^(.*)/Forms/[^/]+\.aspx$")
+
+
+def sharepoint_folder_url(raw: str) -> "str | None":
+    """Return the folder URL for a SharePoint library view URL, else None.
+
+    A view URL has a path ending in ``/Forms/<name>.aspx``. The folder is the
+    decoded ``id`` query value when present, otherwise the library root (the
+    path prefix before ``/Forms/``). The result is not yet normalized.
+    """
+    try:
+        parts = urllib.parse.urlsplit(raw.strip())
+    except ValueError:
+        return None
+    m = _SP_VIEW_RE.match(parts.path)
+    if not m:
+        return None
+    ids = urllib.parse.parse_qs(parts.query).get("id")
+    folder = ids[0] if ids and ids[0] else m.group(1)
+    return f"{parts.scheme}://{parts.netloc}{folder}"
+
+
+def is_sharepoint_view_url(raw: str) -> bool:
+    """True when ``raw`` is a SharePoint library view URL."""
+    return sharepoint_folder_url(raw) is not None
+
+
+def resolve_absolute(base: str, source_dir: tuple, docx_path: str) -> tuple:
+    """Resolve ``docx_path`` against ``base`` from ``source_dir``.
+
+    ``source_dir`` is the source file's directory (tuple of segments) relative
+    to the base folder. Returns ``(url, climbed)``; ``climbed`` is True when a
+    ``..`` segment tried to leave the base folder and was discarded. The URL
+    never contains a fragment.
+    """
+    stack = list(source_dir)
+    climbed = False
+    for seg in docx_path.split("/"):
+        if seg in ("", "."):
+            continue
+        if seg == "..":
+            if stack:
+                stack.pop()
+            else:
+                climbed = True
+            continue
+        stack.append(seg)
+    return base.rstrip("/") + "/" + "/".join(encode_path(s) for s in stack), climbed
 
 
 def slugify_heading(text: str) -> str:
@@ -421,16 +611,137 @@ def slugify_heading(text: str) -> str:
     return text.strip("-")
 
 
-def build_heading_anchors(blocks: list) -> dict:
+BOOKMARK_MAX = 40
+
+
+def bookmark_name(slug: str) -> str:
+    """Return a deterministic Word bookmark name (``^_[A-Za-z0-9_]{1,39}$``)."""
+    ascii_text = "".join(
+        c for c in unicodedata.normalize("NFKD", slug) if not unicodedata.combining(c)
+    )
+    body = re.sub(r"[^A-Za-z0-9]+", "_", ascii_text).strip("_")
+    if not body:
+        if slug:
+            body = "h_" + hashlib.sha1(slug.encode("utf-8")).hexdigest()[:8]
+        else:
+            body = "section"
+    name = "_toc_" + body
+    if len(name) > BOOKMARK_MAX:
+        digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
+        name = name[: BOOKMARK_MAX - 9] + "_" + digest
+    return name
+
+
+def bookmark_for_fragment(fragment: str) -> str:
+    """Convert a link fragment to the bookmark name of its target heading."""
+    return bookmark_name(slugify_heading(percent_decode(fragment)))
+
+
+def _warn_stderr(message: str) -> None:
+    """Default warning sink: write one line to stderr."""
+    print(message, file=sys.stderr)
+
+
+@dataclass(frozen=True)
+class LinkContext:
+    enabled: bool = True  # False when --no-sibling-links
+    base_url: "str | None" = None  # normalized, no trailing "/"
+    link_suffix: str = ""  # "?web=1" with --sharepoint, else ""
+    source_path: str = ""  # used in warning text
+    source_dir: "Path | None" = None  # directory for existence checks
+    source_rel_dir: tuple = ()  # source dir relative to the base folder
+    tree_files: "frozenset | None" = None  # resolved paths; None outside -r
+    warn: object = _warn_stderr
+
+
+@dataclass(frozen=True)
+class Rewritten:
+    target: str  # relationship target; never contains "#"
+    anchor: "str | None"  # bookmark name for w:anchor, or None
+
+
+def _build_target(docx_path: str, ctx: LinkContext, written: str) -> str:
+    """Return the relationship target (relative or absolute) for ``docx_path``."""
+    if ctx.base_url:
+        url, climbed = resolve_absolute(ctx.base_url, ctx.source_rel_dir, docx_path)
+        if climbed:
+            ctx.warn(
+                f"WARNING: {ctx.source_path}: link target leaves the base URL "
+                f"folder: {written}"
+            )
+        return url + ctx.link_suffix
+    return encode_path(docx_path)
+
+
+def rewrite_link(raw_target: str, ctx: "LinkContext | None") -> "Rewritten | None":
+    """Rewrite a Sibling_Link target to a ``.docx`` target plus bookmark anchor.
+
+    Returns None when ``ctx`` is None or disabled, or when ``raw_target`` is not
+    a sibling Markdown link (the caller then uses the pre-existing branches).
+    """
+    if ctx is None or not ctx.enabled:
+        return None
+    parsed = parse_link_target(raw_target)
+    if parsed is None:
+        return None
+    if ctx.source_dir is not None:
+        try:
+            candidate = (Path(ctx.source_dir) / parsed.path).resolve()
+            exists = candidate.is_file()
+        except (OSError, ValueError):
+            candidate, exists = None, False
+        outside = (
+            exists and ctx.tree_files is not None and candidate not in ctx.tree_files
+        )
+        if not exists or outside:
+            ctx.warn(
+                f"WARNING: {ctx.source_path}: link target not found: {raw_target}"
+            )
+    docx_path = to_docx_target(parsed.path)
+    target = _build_target(docx_path, ctx, raw_target)
+    anchor = bookmark_for_fragment(parsed.fragment) if parsed.fragment else None
+    return Rewritten(target, anchor)
+
+
+def rewrite_wiki_link(inner: str, ctx: "LinkContext | None"):
+    """Rewrite ``[[Note...]]`` text; return ``(Rewritten, visible label)`` or None.
+
+    No missing-file warning is emitted for wiki links. Same-document
+    ``[[#Heading]]`` links return None (handled by the internal-link path).
+    """
+    if ctx is None or not ctx.enabled:
+        return None
+    wiki = wiki_parts(inner)
+    if wiki is None or not wiki.note:
+        return None
+    if _MD_EXT_RE.search(wiki.note):
+        docx_path = to_docx_target(wiki.note)
+    else:
+        docx_path = wiki.note + ".docx"
+    target = _build_target(docx_path, ctx, inner)
+    anchor = bookmark_for_fragment(wiki.heading) if wiki.heading else None
+    if "|" in inner:
+        label = wiki.label
+    else:
+        label = wiki.note.split("/")[-1]
+        if wiki.heading:
+            label += "#" + wiki.heading
+    return Rewritten(target, anchor), label
+
+
+def build_heading_anchors(blocks: list, legacy: bool = False) -> dict:
     """Build a map of anchor keys -> unique bookmark name for every heading.
 
     Registers each heading under both its GitHub-style slug (for
     ``[text](#slug)`` links) and its lowercased raw text (for Obsidian
     ``[[#Heading Text]]`` links). Duplicate slugs get a numeric suffix,
-    matching GitHub's behavior.
+    matching GitHub's behavior. Bookmark names come from ``bookmark_name`` and
+    are unique within the document. With ``legacy=True`` the old
+    ``_toc_{idx}_{slug}`` naming is kept.
     """
     anchors = {}
     slug_counts = {}
+    used = set()
     for idx, block in enumerate(blocks):
         if block.get("type") in ("h1", "h2", "h3", "h4", "h5", "h6"):
             base_slug = slugify_heading(block["text"])
@@ -440,7 +751,15 @@ def build_heading_anchors(blocks: list) -> dict:
             slug = base_slug if count == 0 else f"{base_slug}-{count}"
             slug_counts[base_slug] = count + 1
 
-            bookmark = f"_toc_{idx}_{slug}"
+            if legacy:
+                bookmark = f"_toc_{idx}_{slug}"
+            else:
+                bookmark = bookmark_name(slug)
+                n = 0
+                while bookmark in used:
+                    n += 1
+                    bookmark = bookmark_name(f"{slug}-x{n}")
+                used.add(bookmark)
             block["_bookmark"] = bookmark
             # Key by slug (GitHub anchors) and by raw lowercased text (Obsidian)
             anchors.setdefault(slug, bookmark)
@@ -776,6 +1095,47 @@ def _add_external_hyperlink(paragraph, text: str, url: str):
     hyperlink = OxmlElement("w:hyperlink")
     hyperlink.set(qn("r:id"), r_id)
     hyperlink.append(_build_hyperlink_run(text))
+    paragraph._p.append(hyperlink)
+
+
+def _add_document_hyperlink(paragraph, href: str, anchor, runs):
+    """Add one ``w:hyperlink`` to another document, with one ``w:r`` per RunSpec.
+
+    ``href`` becomes an external relationship (``r:id``); ``anchor``, when not
+    None, is written as ``w:anchor`` (the bookmark in the target document).
+    Each run gets its flag-derived properties plus the ``Hyperlink`` rStyle.
+    """
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    from docx.text.run import Run
+
+    r_id = paragraph.part.relate_to(href, RT.HYPERLINK, is_external=True)
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+    if anchor is not None:
+        hyperlink.set(qn("w:anchor"), anchor)
+    hyperlink.set(qn("w:history"), "1")
+    for spec in runs:
+        r = _build_hyperlink_run(spec.text)
+        run = Run(r, paragraph)
+        _apply_run_flags(run, spec.flags)
+        # Hyperlink character style must win; it replaces any code char style,
+        # so stamp the inline-code font directly in that case.
+        rPr = r.get_or_add_rPr()
+        for old in rPr.findall(qn("w:rStyle")):
+            rPr.remove(old)
+        rStyle = OxmlElement("w:rStyle")
+        rStyle.set(qn("w:val"), STYLE_HYPERLINK)
+        rPr.insert(0, rStyle)
+        if "code" in spec.flags:
+            sc = _ACTIVE_STYLE
+            _apply_run_format(
+                run,
+                font=sc.text("inline_code", "font", "Consolas"),
+                size_pt=sc.num("inline_code", "size_pt", 10),
+                color=sc.color("inline_code", "color"),
+                fill=sc.text("inline_code", "fill"),
+            )
+        hyperlink.append(r)
     paragraph._p.append(hyperlink)
 
 
@@ -1554,7 +1914,12 @@ def _unescape_sentinels(text: str) -> str:
 
 
 def add_formatted_text(
-    paragraph, text: str, anchors: dict = None, base_dir=None, allow_remote_images=False
+    paragraph,
+    text: str,
+    anchors: dict = None,
+    base_dir=None,
+    allow_remote_images=False,
+    link_ctx=None,
 ):
     """Add text to a paragraph, handling **bold**, *italic*, `code`, links, and \\n line breaks.
 
@@ -1567,7 +1932,12 @@ def add_formatted_text(
     ``base_dir`` is the directory used to resolve relative image paths (see
     :func:`_add_image`); it defaults to the current working directory.
     ``allow_remote_images`` enables fetching ``http(s)`` image sources.
+
+    ``link_ctx`` (a :class:`LinkContext`) enables sibling Markdown links and
+    ``[[Note...]]`` wiki links as hyperlinks to ``.docx`` targets. With ``None``
+    or a disabled context, the pre-feature behaviour is used unchanged.
     """
+    links_on = link_ctx is not None and link_ctx.enabled
     # Hide backslash-escaped punctuation before any tokenization so escaped
     # markers (e.g. ``\*not italic\*``) cannot start a construct.
     text = _escape_punct(text)
@@ -1612,13 +1982,30 @@ def add_formatted_text(
         text,
     )
 
-    # Remaining (non-heading) wiki links: [[path/page]] -> page, [[page|alias]] -> alias
-    text = re.sub(
-        r"\[\[([^|\]]+)\|([^\]]+)\]\]", r"\2", text
-    )  # [[target|alias]] -> alias
-    text = re.sub(
-        r"\[\[([^\]]+)\]\]", lambda m: m.group(1).split("/")[-1], text
-    )  # [[path/page]] -> page
+    if links_on:
+        # Wiki links to other notes become WIKI tokens; malformed ones
+        # ([[]], [[Note|]]) stay as written; anything that cannot be carried in
+        # a token (control sentinels, newlines) is flattened to its label.
+        def _wiki_token(m):
+            inner = m.group(1)
+            wiki = wiki_parts(inner)
+            if wiki is None:
+                return m.group(0)
+            if not wiki.note or "\x00" in inner or "\n" in inner:
+                if "|" in inner:
+                    return inner.partition("|")[2]
+                return inner.split("/")[-1]
+            return f"\x00WIKI\x00{inner}\x00"
+
+        text = re.sub(r"\[\[([^\]]+)\]\]", _wiki_token, text)
+    else:
+        # Remaining (non-heading) wiki links: [[path/page]] -> page, [[page|alias]] -> alias
+        text = re.sub(
+            r"\[\[([^|\]]+)\|([^\]]+)\]\]", r"\2", text
+        )  # [[target|alias]] -> alias
+        text = re.sub(
+            r"\[\[([^\]]+)\]\]", lambda m: m.group(1).split("/")[-1], text
+        )  # [[path/page]] -> page
 
     # Split on newlines first to handle line breaks
     segments = text.split("\n")
@@ -1629,7 +2016,9 @@ def add_formatted_text(
 
         # Split out link/image placeholders so they aren't chopped by the emphasis regex
         link_parts = re.split(
-            r"((?:\x00LINK\x00|\x00IMG\x00)[^\x00]*\x00[^\x00]*\x00)", segment
+            r"(\x00WIKI\x00[^\x00]*\x00"
+            r"|(?:\x00LINK\x00|\x00IMG\x00)[^\x00]*\x00[^\x00]*\x00)",
+            segment,
         )
         for lp in link_parts:
             img_match = re.match(r"\x00IMG\x00([^\x00]*)\x00([^\x00]*)\x00", lp)
@@ -1641,6 +2030,22 @@ def add_formatted_text(
                 )
                 continue
 
+            wiki_match = re.match(r"\x00WIKI\x00([^\x00]*)\x00$", lp) if links_on else None
+            if wiki_match:
+                inner = wiki_match.group(1)
+                rewritten = rewrite_wiki_link(inner, link_ctx)
+                if rewritten is not None:
+                    rw, wlabel = rewritten
+                    runs = parse_label_runs(wlabel)
+                    if runs:
+                        _add_document_hyperlink(paragraph, rw.target, rw.anchor, runs)
+                        continue
+                    wlabel = _unescape_sentinels(wlabel)
+                else:
+                    wlabel = inner.split("/")[-1]
+                paragraph.add_run(wlabel)
+                continue
+
             link_match = re.match(r"\x00LINK\x00([^\x00]*)\x00([^\x00]*)\x00", lp)
             if link_match:
                 target = _unescape_sentinels(link_match.group(1))
@@ -1648,6 +2053,17 @@ def add_formatted_text(
                 bookmark = _resolve_internal_anchor(target, anchors)
                 if bookmark:
                     _add_internal_hyperlink(paragraph, label, bookmark)
+                    continue
+                rewritten = rewrite_link(target, link_ctx)
+                runs = (
+                    parse_label_runs(link_match.group(2))
+                    if rewritten is not None
+                    else None
+                )
+                if rewritten is not None and runs:
+                    _add_document_hyperlink(
+                        paragraph, rewritten.target, rewritten.anchor, runs
+                    )
                 elif re.match(r"^(https?://|mailto:)", target.strip()):
                     _add_external_hyperlink(paragraph, label, target.strip())
                 else:
@@ -1703,7 +2119,7 @@ _BARE_URL_RE = re.compile(r"https?://[^\s<>()]+")
 _URL_TRAILING_PUNCT = ".,;:!?)]}'\""
 
 
-def _style_run(run, flags):
+def _apply_run_flags(run, flags):
     """Apply the accumulated formatting flags to a run, using the active style.
 
     Normal runs inherit their font/size/color from the paragraph style (or the
@@ -1747,7 +2163,7 @@ def _emit_run(paragraph, text, flags):
 
     # Inside a code span, don't linkify — emit a single styled run verbatim.
     if "code" in flags:
-        _style_run(paragraph.add_run(text), flags)
+        _apply_run_flags(paragraph.add_run(text), flags)
         return
 
     # Split the text around bare URLs, emitting external hyperlinks for them and
@@ -1760,14 +2176,14 @@ def _emit_run(paragraph, text, flags):
         trailing = url[len(trimmed) :]
         before = text[pos : m.start()]
         if before:
-            _style_run(paragraph.add_run(before), flags)
+            _apply_run_flags(paragraph.add_run(before), flags)
         _add_external_hyperlink(paragraph, trimmed, trimmed)
         if trailing:
-            _style_run(paragraph.add_run(trailing), flags)
+            _apply_run_flags(paragraph.add_run(trailing), flags)
         pos = m.end()
     remainder = text[pos:]
     if remainder:
-        _style_run(paragraph.add_run(remainder), flags)
+        _apply_run_flags(paragraph.add_run(remainder), flags)
 
 
 def _render_inline(paragraph, text, flags=frozenset()):
@@ -1778,6 +2194,18 @@ def _render_inline(paragraph, text, flags=frozenset()):
     flag so combinations like **`code`** (bold + monospace) or ***bold italic***
     render correctly. Code spans are treated as literal and not re-parsed.
     """
+    for seg_text, seg_flags in _iter_inline_segments(text, flags):
+        _emit_run(paragraph, seg_text, seg_flags)
+
+
+def _iter_inline_segments(text, flags=frozenset()):
+    """Yield ``(text, flags)`` segments from the inline emphasis/code tokenizer.
+
+    Finds the earliest emphasis or code token, yields the text before it with
+    the current flags, recurses into the token's inner content with the added
+    flag, then continues with whatever follows. Code spans are not re-parsed.
+    Segments may be empty; callers skip those.
+    """
     # Find the earliest-matching pattern in the text.
     best = None  # (start, match, add_flags, recurse_inner)
     for pattern, add_flags, recurse_inner in _INLINE_PATTERNS:
@@ -1786,22 +2214,54 @@ def _render_inline(paragraph, text, flags=frozenset()):
             best = (m.start(), m, add_flags, recurse_inner)
 
     if best is None:
-        _emit_run(paragraph, text, flags)
+        yield text, flags
         return
 
     start, m, add_flags, recurse_inner = best
     # Text before the token keeps the current flags.
-    _emit_run(paragraph, text[:start], flags)
+    yield text[:start], flags
 
     new_flags = flags.union(add_flags)
     inner = m.group(1)
     if recurse_inner:
-        _render_inline(paragraph, inner, new_flags)
+        yield from _iter_inline_segments(inner, new_flags)
     else:
-        _emit_run(paragraph, inner, new_flags)
+        yield inner, new_flags
 
     # Continue with whatever follows the token.
-    _render_inline(paragraph, text[m.end() :], flags)
+    yield from _iter_inline_segments(text[m.end() :], flags)
+
+
+@dataclass(frozen=True)
+class RunSpec:
+    text: str
+    flags: frozenset  # inline formats active for this run
+
+
+# Nested constructs inside a hyperlink label, flattened to their visible text.
+_LABEL_LINK_RE = re.compile(r"\x00LINK\x00[^\x00]*\x00([^\x00]*)\x00")
+_LABEL_MD_LINK_RE = re.compile(r"(?<!!)\[([^\[\]]*)\]\([^()\s]*\)")
+
+
+def parse_label_runs(label):
+    """Split a hyperlink label into formatted :class:`RunSpec` items.
+
+    Uses the same tokenizer as :func:`_render_inline`. Nested links are
+    flattened to their label text. Adjacent segments with equal flags merge, so
+    an unformatted label yields exactly one run; an empty label yields none.
+    """
+    label = _LABEL_LINK_RE.sub(r"\1", label)
+    label = _LABEL_MD_LINK_RE.sub(r"\1", label)
+    runs = []
+    for seg_text, seg_flags in _iter_inline_segments(label):
+        seg_text = _unescape_sentinels(seg_text)
+        if seg_text == "":
+            continue
+        if runs and runs[-1].flags == seg_flags:
+            runs[-1] = RunSpec(runs[-1].text + seg_text, seg_flags)
+        else:
+            runs.append(RunSpec(seg_text, frozenset(seg_flags)))
+    return runs
 
 
 def _make_element(tag, **attrs):
@@ -2399,6 +2859,7 @@ def _render_list_block(
     numbered_abstract,
     base_dir=None,
     allow_remote_images=False,
+    link_ctx=None,
 ):
     """Render a (possibly nested) list block into ``doc``.
 
@@ -2443,6 +2904,7 @@ def _render_list_block(
                 anchors,
                 base_dir=base_dir,
                 allow_remote_images=allow_remote_images,
+                link_ctx=link_ctx,
             )
             children = node.get("children") if isinstance(node, dict) else None
             if children:
@@ -2460,6 +2922,8 @@ def build_docx(
     base_dir=None,
     allow_remote_images=False,
     style=None,
+    link_ctx=None,
+    announce=True,
 ):
     """Build the DOCX from parsed blocks, applying named styles from ``style``.
 
@@ -2469,7 +2933,9 @@ def build_docx(
     the current working directory when not supplied. ``allow_remote_images``
     enables fetching ``http(s)`` image sources (off by default). ``style`` is a
     merged style dict (see :func:`load_style`); when ``None`` the built-in
-    defaults are used.
+    defaults are used. ``link_ctx`` is an optional :class:`LinkContext`; when it
+    is ``None`` or disabled the pre-feature link behaviour and heading bookmark
+    names are used. ``announce`` controls the ``Saved:`` line.
     """
     if base_dir is None:
         base_dir = Path.cwd()
@@ -2488,7 +2954,8 @@ def build_docx(
 
     # Build the heading anchor map (also tags each heading block with a
     # "_bookmark" name) so TOC links can resolve to real internal hyperlinks.
-    anchors = build_heading_anchors(blocks)
+    links_on = link_ctx is not None and link_ctx.enabled
+    anchors = build_heading_anchors(blocks, legacy=not links_on)
 
     # Create our own list numbering definitions (bullet + decimal) so lists work
     # without a template's numbering part. Each defines several nesting levels.
@@ -2533,6 +3000,7 @@ def build_docx(
                     anchors,
                     base_dir=base_dir,
                     allow_remote_images=allow_remote_images,
+                    link_ctx=link_ctx,
                 )
                 first = False
 
@@ -2563,6 +3031,7 @@ def build_docx(
                     anchors,
                     base_dir=base_dir,
                     allow_remote_images=allow_remote_images,
+                    link_ctx=link_ctx,
                 )
 
             current_para_lines = []
@@ -2634,6 +3103,7 @@ def build_docx(
                                 anchors,
                                 base_dir=base_dir,
                                 allow_remote_images=allow_remote_images,
+                                link_ctx=link_ctx,
                             )
                 # Emphasize the header row, then size columns to content.
                 _apply_table_header(table, sc)
@@ -2673,6 +3143,7 @@ def build_docx(
                 anchors,
                 base_dir=base_dir,
                 allow_remote_images=allow_remote_images,
+                link_ctx=link_ctx,
             )
 
         elif block["type"] in ("list", "numbered_list"):
@@ -2685,6 +3156,7 @@ def build_docx(
                 numbered_abstract,
                 base_dir=base_dir,
                 allow_remote_images=allow_remote_images,
+                link_ctx=link_ctx,
             )
 
     # Write optional document metadata to the file's core properties.
@@ -2709,30 +3181,102 @@ def build_docx(
             cp.created = created
 
     doc.save(output_path)
-    print(f"Saved: {output_path}")
+    if announce:
+        print(f"Saved: {output_path}")
 
 
-def check_output_writable(output_path: str):
-    """Fail fast if the output .docx is open in Word (or otherwise locked).
+SKIPPED_DIR_NAMES = frozenset({"node_modules", "venv", "__pycache__"})
+
+
+@dataclass(frozen=True)
+class Plan:
+    mode: str  # "single" or "tree"
+    input_root: "Path | None"
+    items: list  # list of (Relative_Path, output Path)
+    outdir: "Path | None"
+    collisions: tuple = ()  # Collision groups dropped from ``items``
+
+
+@dataclass(frozen=True)
+class Collision:
+    dir: str  # posix directory of the group ("" for the root)
+    stem: str
+    files: tuple  # every Relative_Path in the group, sorted
+
+
+def is_skipped_dir(name: str) -> bool:
+    """True for hidden directories and node_modules/venv/__pycache__."""
+    return name.startswith(".") or name in SKIPPED_DIR_NAMES
+
+
+def discover_tree(root: Path) -> list:
+    """Return sorted posix Relative_Paths of Markdown files under ``root``.
+
+    Skipped directories are pruned in place and symlinked directories are
+    never entered. The root itself is never tested against the skip rules.
+    """
+    root = Path(root)
+    found = []
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if not is_skipped_dir(d)]
+        for name in filenames + [
+            d for d in dirnames if os.path.islink(os.path.join(dirpath, d))
+        ]:
+            if name.startswith(".") or not _MD_EXT_RE.search(name):
+                continue
+            full = os.path.join(dirpath, name)
+            if not os.path.isfile(full):
+                continue
+            found.append(Path(os.path.relpath(full, root)).as_posix())
+    return sorted(set(found))
+
+
+def output_relpath(rel: str) -> str:
+    """Replace a trailing ``.md``/``.markdown`` extension with ``.docx``."""
+    return _MD_EXT_RE.sub(".docx", rel)
+
+
+def plan_outputs(rels, input_root, outdir) -> tuple:
+    """Map Relative_Paths to output paths and detect stem collisions.
+
+    Returns ``(mapping, collisions)``. Files sharing a directory and stem
+    (e.g. ``a.md`` and ``a.markdown``) are dropped from the mapping and
+    reported as one Collision naming every file in the group.
+    """
+    groups: dict = {}
+    for rel in rels:
+        d, _, name = rel.rpartition("/")
+        groups.setdefault((d, _MD_EXT_RE.sub("", name)), []).append(rel)
+    base = Path(outdir) if outdir is not None else Path(input_root)
+    mapping: dict = {}
+    collisions = []
+    for (d, stem), files in groups.items():
+        if len(files) > 1:
+            collisions.append(Collision(d, stem, tuple(sorted(files))))
+            continue
+        mapping[files[0]] = base / output_relpath(files[0])
+    collisions.sort(key=lambda c: (c.dir, c.stem))
+    return dict(sorted(mapping.items())), collisions
+
+
+def output_lock_error(output_path) -> "str | None":
+    """Return a message when the output .docx is open in Word or locked, else None.
 
     When Word has a document open it creates a hidden owner file named
     ``~$<filename>`` alongside it and holds a write lock on the file itself.
     Saving over it would raise a PermissionError partway through the run, so we
-    detect both signals up front and print an actionable message.
-
-    Returns None on success; prints an error and exits(1) on a detected lock.
+    detect both signals up front.
     """
     out = Path(output_path)
 
     # 1. Word owner/lock file: ~$<filename> in the same directory.
     lock_file = out.parent / f"~${out.name}"
     if lock_file.exists():
-        print(
+        return (
             f"ERROR: '{out.name}' appears to be open in Word "
-            f"(found lock file '{lock_file.name}')."
+            f"(found lock file '{lock_file.name}').\n"
+            "       Close the document in Word and run the conversion again."
         )
-        print("       Close the document in Word and run the conversion again.")
-        sys.exit(1)
 
     # 2. If the file exists, confirm we can actually open it for writing.
     #    On Windows an open Word doc is locked and this raises PermissionError.
@@ -2741,12 +3285,23 @@ def check_output_writable(output_path: str):
             with open(out, "a"):
                 pass
         except PermissionError:
-            print(
+            return (
                 f"ERROR: cannot write to '{out.name}' — the file is locked, "
-                f"likely open in Word or another program."
+                f"likely open in Word or another program.\n"
+                "       Close the document and run the conversion again."
             )
-            print("       Close the document and run the conversion again.")
-            sys.exit(1)
+    return None
+
+
+def check_output_writable(output_path: str):
+    """Fail fast if the output .docx is open in Word (or otherwise locked).
+
+    Returns None on success; prints an error and exits(1) on a detected lock.
+    """
+    message = output_lock_error(output_path)
+    if message is not None:
+        print(message)
+        sys.exit(1)
 
 
 def _resolve_version() -> str:
@@ -2761,6 +3316,26 @@ def _resolve_version() -> str:
         return version("md-to-docx")
     except PackageNotFoundError:
         return "0+unknown"
+
+
+def _base_url_arg(raw: str) -> str:
+    """argparse ``type`` wrapper around :func:`normalize_base_url`."""
+    try:
+        url = _NormalizedUrl(normalize_base_url(raw))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
+    try:
+        parts = urllib.parse.urlsplit(raw.strip())
+        url.dropped = bool(parts.query or parts.fragment)
+    except ValueError:
+        pass
+    return url
+
+
+class _NormalizedUrl(str):
+    """A normalized base URL that remembers whether a query/fragment was dropped."""
+
+    dropped = False
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -2797,13 +3372,45 @@ def build_parser() -> argparse.ArgumentParser:
         "input",
         nargs="?",
         metavar="input.md",
-        help="Path to the Markdown input file.",
+        help="Markdown file or directory.",
     )
     parser.add_argument(
         "output",
         nargs="?",
         metavar="output.docx",
-        help="Path to write the .docx output.",
+        help="Path to write the .docx output (cannot be combined with -r or --outdir).",
+    )
+    parser.add_argument(
+        "-r",
+        "--recursive",
+        action="store_true",
+        help="Convert Markdown files in subdirectories of a directory input too.",
+    )
+    parser.add_argument(
+        "-o",
+        "--outdir",
+        metavar="DIR",
+        help="Write .docx outputs under DIR instead of next to the sources.",
+    )
+    parser.add_argument(
+        "--no-sibling-links",
+        action="store_true",
+        help="Do not rewrite links to sibling Markdown files into .docx links.",
+    )
+    parser.add_argument(
+        "--link-base-url",
+        metavar="URL",
+        help="Base http(s) URL used to resolve links to Markdown files outside the run.",
+    )
+    parser.add_argument(
+        "--sharepoint",
+        "--sp",
+        dest="sharepoint",
+        action="store_true",
+        help=(
+            "Treat --link-base-url as a SharePoint library: accept a library "
+            "view URL and append ?web=1 to generated links."
+        ),
     )
     return parser
 
@@ -2818,26 +3425,166 @@ def main():
         sys.stdout.buffer.write(dump_default_style().encode("utf-8"))
         sys.exit(0)
 
-    if not args.input or not args.output:
-        parser.error("the following arguments are required: input.md, output.docx")
-
-    input_path = args.input
-    output_path = args.output
-    allow_remote_images = args.allow_remote_images
-    style_path = args.style_path
-
-    if not Path(input_path).exists():
-        print(f"ERROR: {input_path} not found")
-        sys.exit(1)
+    plan = resolve_mode(args, parser)
 
     try:
-        style = load_style(style_path)
+        style = load_style(args.style_path)
     except StyleError as exc:
         print(f"ERROR: {exc}")
         sys.exit(1)
 
+    base_url = args.link_base_url
+    if base_url is not None and getattr(base_url, "dropped", False):
+        print(
+            "WARNING: --link-base-url: query and fragment were dropped from the URL",
+            file=sys.stderr,
+        )
+    if getattr(args, "sp_hint", False):
+        print(
+            "WARNING: --link-base-url looks like a SharePoint library view URL; "
+            "use --sharepoint to convert it to the folder URL and append ?web=1 "
+            "to links",
+            file=sys.stderr,
+        )
+
+    if plan.mode == "tree":
+        sys.exit(convert_tree(plan, args, style=style))
+
+    input_path, output_path = plan.items[0]
+    link_ctx = LinkContext(
+        enabled=not args.no_sibling_links,
+        base_url=str(base_url) if base_url else None,
+        link_suffix=args.link_suffix,
+        source_path=str(input_path),
+        source_dir=Path(input_path).resolve().parent,
+    )
     # Preflight: bail early with a clear message if the output is locked/open.
-    check_output_writable(output_path)
+    check_output_writable(str(output_path))
+    if plan.outdir is not None:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    convert_file(input_path, str(output_path), args, link_ctx, announce=True, style=style)
+
+
+def _resolve_base_url(args, parser) -> None:
+    """Validate/normalize ``--link-base-url`` in place; set ``link_suffix``.
+
+    Sets ``args.link_base_url`` (normalized, or None), ``args.link_suffix`` and
+    ``args.sp_hint`` (True when a SharePoint view URL was given without
+    ``--sharepoint``).
+    """
+    raw = getattr(args, "link_base_url", None)
+    sharepoint = bool(getattr(args, "sharepoint", False))
+    args.link_suffix = ""
+    args.sp_hint = False
+    if sharepoint and raw is None:
+        parser.error("--sharepoint requires --link-base-url")
+    if raw is None:
+        args.link_base_url = None
+        return
+    if isinstance(raw, _NormalizedUrl):
+        return  # already resolved
+    candidate = raw
+    converted = False
+    if sharepoint:
+        folder = sharepoint_folder_url(raw)
+        if folder is not None:
+            candidate, converted = folder, True
+        args.link_suffix = "?web=1"
+    elif is_sharepoint_view_url(raw):
+        args.sp_hint = True
+    try:
+        url = _NormalizedUrl(normalize_base_url(candidate))
+    except ValueError as exc:
+        parser.error(str(exc))
+    if not converted:
+        try:
+            parts = urllib.parse.urlsplit(raw.strip())
+            url.dropped = bool(parts.query or parts.fragment)
+        except ValueError:
+            pass
+    args.link_base_url = url
+
+
+def resolve_mode(args, parser) -> Plan:
+    """Validate option combinations and return the conversion Plan.
+
+    Exits non-zero before any file is created when the combination is invalid.
+    """
+    if not args.input:
+        if args.output is None:
+            parser.error("the following arguments are required: input.md, output.docx")
+        parser.error("the following arguments are required: input.md")
+
+    _resolve_base_url(args, parser)
+
+    input_path = Path(args.input)
+    if not input_path.exists():
+        print(f"ERROR: {args.input} not found")
+        sys.exit(1)
+
+    is_dir = input_path.is_dir()
+    if is_dir and not args.recursive:
+        parser.error(
+            f"'{args.input}' is a directory; use -r/--recursive to convert "
+            "the Markdown files under it"
+        )
+    if is_dir and args.output:
+        parser.error("the output argument cannot be combined with -r/--recursive")
+    if args.outdir and args.output:
+        parser.error("the output argument cannot be combined with --outdir")
+
+    outdir = None
+    if args.outdir:
+        outdir = Path(args.outdir)
+        problem = _outdir_problem(outdir)
+        if problem:
+            print(f"ERROR: --outdir {args.outdir}: {problem}")
+            sys.exit(1)
+
+    if is_dir:
+        rels = discover_tree(input_path)
+        mapping, collisions = plan_outputs(rels, input_path, outdir)
+        return Plan("tree", input_path, list(mapping.items()), outdir, tuple(collisions))
+
+    if outdir is not None:
+        out = outdir / (input_path.stem + ".docx")
+    elif args.output:
+        out = Path(args.output)
+    else:
+        parser.error("the following arguments are required: output.docx")
+    return Plan("single", None, [(str(input_path), out)], outdir)
+
+
+def _outdir_problem(outdir: Path) -> "str | None":
+    """Return why ``outdir`` cannot be used (without creating it), or None."""
+    if outdir.exists():
+        if not outdir.is_dir():
+            return "exists and is not a directory"
+        if not os.access(outdir, os.W_OK):
+            return "is not writable"
+        return None
+    ancestor = outdir.parent
+    while not ancestor.exists():
+        if ancestor.parent == ancestor:
+            break
+        ancestor = ancestor.parent
+    if not ancestor.is_dir():
+        return f"cannot be created ('{ancestor}' is not a directory)"
+    if not os.access(ancestor, os.W_OK):
+        return f"cannot be created (no write access to '{ancestor}')"
+    return None
+
+
+def convert_file(
+    input_path, output_path, opts, link_ctx, *, announce=True, style=None
+) -> None:
+    """Convert one Markdown file to ``output_path``.
+
+    ``opts`` supplies ``allow_remote_images`` and ``style_path``; ``style`` may
+    be passed to avoid reloading the config for every file.
+    """
+    if style is None:
+        style = load_style(opts.style_path)
 
     text = Path(input_path).read_text(encoding="utf-8")
     blocks = parse_markdown(text)
@@ -2853,15 +3600,85 @@ def main():
 
     build_docx(
         blocks,
-        output_path,
+        str(output_path),
         title=doc_title,
         author=doc_author,
         date=datetime.now(timezone.utc),
         # Resolve relative image paths against the markdown file's directory.
         base_dir=Path(input_path).resolve().parent,
-        allow_remote_images=allow_remote_images,
+        allow_remote_images=opts.allow_remote_images,
         style=style,
+        link_ctx=link_ctx,
+        announce=announce,
     )
+
+
+def convert_tree(plan: Plan, opts, style=None) -> int:
+    """Convert every file in a tree Plan; return the process exit status."""
+    root = Path(plan.input_root)
+    collisions = list(plan.collisions)
+    if not plan.items and not collisions:
+        print(f"WARNING: no Markdown files found under {root}", file=sys.stderr)
+        return 0
+
+    if style is None:
+        try:
+            style = load_style(opts.style_path)
+        except StyleError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 1
+
+    base_url = opts.link_base_url
+    tree_files = frozenset((root / rel).resolve() for rel, _ in plan.items)
+    # Collided files still exist in the tree, so links to them are not "missing".
+    tree_files |= frozenset(
+        (root / rel).resolve() for c in collisions for rel in c.files
+    )
+
+    converted = 0
+    failed = 0
+    for c in collisions:
+        where = f"{c.dir}/" if c.dir else ""
+        print(
+            f"ERROR: output name collision for '{where}{c.stem}.docx': "
+            + ", ".join(c.files),
+            file=sys.stderr,
+        )
+        failed += len(c.files)
+
+    for rel, out in plan.items:
+        out = Path(out)
+        src = root / rel
+        tmp = out.with_name(out.name + ".tmp")
+        try:
+            out.parent.mkdir(parents=True, exist_ok=True)
+            message = output_lock_error(out)
+            if message is not None:
+                raise RuntimeError(message.splitlines()[0].removeprefix("ERROR: "))
+            ctx = LinkContext(
+                enabled=not opts.no_sibling_links,
+                base_url=str(base_url) if base_url else None,
+                link_suffix=getattr(opts, "link_suffix", ""),
+                source_path=rel,
+                source_dir=src.resolve().parent,
+                source_rel_dir=tuple(rel.split("/")[:-1]),
+                tree_files=tree_files,
+            )
+            convert_file(src, tmp, opts, ctx, announce=False, style=style)
+            os.replace(tmp, out)
+        except Exception as exc:  # noqa: BLE001 - keep going after any failure
+            print(f"ERROR: {rel}: {exc}", file=sys.stderr)
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+            failed += 1
+            continue
+        print(f"{rel} -> {out}")
+        converted += 1
+
+    print(f"Converted {converted} file(s), {failed} failed")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

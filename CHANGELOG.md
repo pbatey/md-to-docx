@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Sibling link rewriting: links to local Markdown files (including
+  `[[wiki links]]`) are rewritten to point at the corresponding `.docx` files,
+  and links to headings use index-free bookmarks. The new `--link-base-url`
+  option rewrites those links to absolute URLs (for example a SharePoint
+  folder). Use `--no-sibling-links` to turn the rewriting off.
+- `--sharepoint`/`--sp` option, used together with `--link-base-url`, for
+  SharePoint document libraries. It requires `--link-base-url` (otherwise the
+  command exits with status 2 and creates no file). In SharePoint, links open
+  the linked document in a new tab, but Word for the web does not scroll to a
+  heading in another document.
+- Recursive conversion with `-r`/`--recursive`, which converts every Markdown
+  file in a directory tree, and `-o`/`--outdir`, which writes the `.docx` files
+  into a mirrored layout under the given output directory.
 - Multi-level nested lists (up to five levels), including mixed
   ordered/unordered nesting. Nesting is normalized by indentation order, so
   irregular hand-authored indentation still nests sensibly.
