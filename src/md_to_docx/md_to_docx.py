@@ -3209,16 +3209,29 @@ def is_skipped_dir(name: str) -> bool:
     return name.startswith(".") or name in SKIPPED_DIR_NAMES
 
 
-def discover_tree(root: Path) -> list:
+def discover_tree(root: Path, follow_links: bool = False) -> list:
     """Return sorted posix Relative_Paths of Markdown files under ``root``.
 
-    Skipped directories are pruned in place and symlinked directories are
-    never entered. The root itself is never tested against the skip rules.
+    Skipped directories are pruned in place. Symlinked directories are only
+    entered when ``follow_links`` is true, and a symlink that points at its
+    own directory or an ancestor of it is skipped so loops cannot occur. The
+    root itself is never tested against the skip rules.
     """
     root = Path(root)
     found = []
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=follow_links):
         dirnames[:] = [d for d in dirnames if not is_skipped_dir(d)]
+        if follow_links:
+            here = os.path.realpath(dirpath)
+            kept = []
+            for d in dirnames:
+                full = os.path.join(dirpath, d)
+                if os.path.islink(full):
+                    target = os.path.realpath(full)
+                    if here == target or here.startswith(target + os.sep):
+                        continue
+                kept.append(d)
+            dirnames[:] = kept
         for name in filenames + [
             d for d in dirnames if os.path.islink(os.path.join(dirpath, d))
         ]:
@@ -3387,6 +3400,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Convert Markdown files in subdirectories of a directory input too.",
     )
     parser.add_argument(
+        "-L",
+        "--follow-links",
+        action="store_true",
+        help="With -r, also descend into symlinked directories (loops are skipped).",
+    )
+    parser.add_argument(
         "-o",
         "--outdir",
         metavar="DIR",
@@ -3523,6 +3542,8 @@ def resolve_mode(args, parser) -> Plan:
         sys.exit(1)
 
     is_dir = input_path.is_dir()
+    if args.follow_links and not args.recursive:
+        parser.error("-L/--follow-links requires -r/--recursive")
     if is_dir and not args.recursive:
         parser.error(
             f"'{args.input}' is a directory; use -r/--recursive to convert "
@@ -3542,7 +3563,7 @@ def resolve_mode(args, parser) -> Plan:
             sys.exit(1)
 
     if is_dir:
-        rels = discover_tree(input_path)
+        rels = discover_tree(input_path, args.follow_links)
         mapping, collisions = plan_outputs(rels, input_path, outdir)
         return Plan("tree", input_path, list(mapping.items()), outdir, tuple(collisions))
 

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "md-to-docx"
-version = "0.3.0"
+version = "0.3.1"
 description = "Convert Markdown to DOCX with YAML-configurable styling, preserving line breaks, tables, lists, and internal links."
 readme = "README.md"
 requires-python = ">=3.10"

@@ -193,7 +193,11 @@ md-to-docx -r docs/ --outdir out/    # writes out/<same relative path>.docx
   depth, in sorted path order. Each output has the same stem with `.docx`.
 - Directories whose names start with `.` and directories named `node_modules`,
   `venv`, or `__pycache__` are skipped, as are files whose names start with `.`.
-  Symbolic links to directories are not followed.
+  Symbolic links to directories are not followed unless you pass `-L`.
+- `-L`/`--follow-links` (requires `-r`) also descends into symbolic links to
+  directories. A link that points at its own directory or an ancestor is
+  skipped, so loops cannot occur. Output paths use the link's path, not its
+  target's.
 - `-o`/`--outdir DIR` writes outputs under `DIR` with the same relative layout
   as the source tree, creating directories as needed, so relative links keep
   working. `--outdir` also works with a single input file (`DIR/<stem>.docx`).
